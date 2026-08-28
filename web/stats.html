@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TriageGate — Ladder Stats</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="header">
+  <span class="logo">TriageGate</span>
+  <span class="badge">IBM Bob 2.0 + watsonx</span>
+</div>
+
+<nav>
+  <a href="index.html">Console</a>
+  <a href="stats.html" class="active">Ladder Stats</a>
+  <a href="about.html">About</a>
+</nav>
+
+<main>
+  <div class="card">
+    <div class="card-title">Tickets Resolved per Rung <span id="total-badge" style="font-weight:400;color:var(--text-muted)"></span></div>
+    <div id="stats-bars">
+      <span class="spinner"></span> Loading stats…
+    </div>
+    <div style="margin-top:18px">
+      <button id="refresh-btn" style="background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;">
+        ↻ Refresh
+      </button>
+    </div>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+const RUNG_LABELS = {
+  svm_gate:        'SVM Gate',
+  voter_agreement: 'Voter Agreement',
+  escalate:        'Bob Investigator',
+  human:           'Human',
+};
+
+async function loadStats() {
+  const container = document.getElementById('stats-bars');
+  container.innerHTML = '<span class="spinner"></span> Loading stats…';
+
+  try {
+    const resp = await fetch('/api/stats');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    const total = Object.values(data).reduce((a, b) => a + b, 0);
+    document.getElementById('total-badge').textContent = total ? `— ${total} total` : '— no tickets yet';
+
+    if (total === 0) {
+      container.innerHTML = '<p style="color:var(--text-muted)">No tickets routed this session yet. Use the Console tab to route one.</p>';
+      return;
+    }
+
+    container.innerHTML = '';
+    // Show all known rungs, zero if not present
+    const allRungs = ['svm_gate', 'voter_agreement', 'escalate', 'human'];
+    allRungs.forEach(rungId => {
+      const count = data[rungId] || 0;
+      const pct   = total > 0 ? Math.round((count / total) * 100) : 0;
+      const label = RUNG_LABELS[rungId] || rungId;
+
+      const row = document.createElement('div');
+      row.className = 'stat-row';
+      row.innerHTML = `
+        <div class="stat-label">${label}</div>
+        <div class="stat-bar"><div class="stat-bar-fill" style="width:${pct}%"></div></div>
+        <div class="stat-pct">${pct}%</div>
+        <div class="stat-count">${count}</div>
+      `;
+      container.appendChild(row);
+    });
+
+    // Also show any unexpected rungs returned by API
+    Object.keys(data).forEach(key => {
+      if (!allRungs.includes(key)) {
+        const count = data[key];
+        const pct   = Math.round((count / total) * 100);
+        const row   = document.createElement('div');
+        row.className = 'stat-row';
+        row.innerHTML = `
+          <div class="stat-label">${esc(key)}</div>
+          <div class="stat-bar"><div class="stat-bar-fill" style="width:${pct}%"></div></div>
+          <div class="stat-pct">${pct}%</div>
+          <div class="stat-count">${count}</div>
+        `;
+        container.appendChild(row);
+      }
+    });
+
+  } catch (err) {
+    container.innerHTML = `<span style="color:var(--red)">Error: ${esc(String(err))}</span>`;
+  }
+}
+
+document.getElementById('refresh-btn').addEventListener('click', loadStats);
+loadStats();
+</script>
+</body>
+</html>

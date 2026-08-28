@@ -1,15 +1,27 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from pathlib import Path
 from typing import Dict
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from triagegate.escalation.bob_tier import EscalationReport, EscalationStore
 from triagegate.models.ticket import LadderResult, RoutingDecision, Ticket
 from triagegate.pipeline.resolver import Resolver
 
 app = FastAPI(title="TriageGate")
+
+# Resolve the web/ directory relative to the project root (two levels above
+# this file: src/triagegate/web/server.py → project root).
+_WEB_DIR = Path(__file__).resolve().parents[3] / "web"
+
+# Mount the web/ directory under /web so individual files are accessible.
+# Explicit top-level routes below allow the HTML pages to use simple relative
+# paths (href="style.css") without a path prefix.
+app.mount("/web", StaticFiles(directory=_WEB_DIR), name="web")
 
 # Lazy-initialised singleton resolver (created on first request so tests that
 # only hit /health don't pay the startup cost).
@@ -27,6 +39,32 @@ def _get_resolver() -> Resolver:
     if _resolver is None:
         _resolver = Resolver()
     return _resolver
+
+
+@app.get("/")
+def root() -> FileResponse:
+    """Serve the Console tab (web/index.html)."""
+    return FileResponse(_WEB_DIR / "index.html", media_type="text/html")
+
+
+@app.get("/stats.html")
+def stats_page() -> FileResponse:
+    return FileResponse(_WEB_DIR / "stats.html", media_type="text/html")
+
+
+@app.get("/about.html")
+def about_page() -> FileResponse:
+    return FileResponse(_WEB_DIR / "about.html", media_type="text/html")
+
+
+@app.get("/style.css")
+def style_css() -> FileResponse:
+    return FileResponse(_WEB_DIR / "style.css", media_type="text/css")
+
+
+@app.get("/app.js")
+def app_js() -> FileResponse:
+    return FileResponse(_WEB_DIR / "app.js", media_type="application/javascript")
 
 
 @app.get("/health")
