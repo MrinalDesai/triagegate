@@ -4,12 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TriageGate — Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div id="header">
-  <span class="logo">TriageGate</span>
+  <span class="logo">Triage<em>Gate</em></span>
   <span class="badge">IBM Bob 2.0 + watsonx</span>
 </div>
 
@@ -33,7 +36,7 @@
       <label for="ticket-desc">Description</label>
       <textarea id="ticket-desc" placeholder="Full description…" required></textarea>
 
-      <button type="submit" id="submit-btn">Route Ticket</button>
+      <button type="submit" id="submit-btn">▶ Route Ticket</button>
     </form>
   </div>
 
@@ -96,21 +99,22 @@ const RUNG_IDS = RUNGS.map(r => r.id);
 
 /**
  * Build the ladder DOM.
- * resolvedBy  – which rung resolved the ticket (or null while loading)
- * isEscalated – true when domain === 'escalated' (Bob glows amber instead of cyan)
+ * resolvedBy   – which rung resolved the ticket (or null while loading)
+ * isEscalated  – true when domain === 'escalated' (Bob glows amber instead of green)
+ * escalationSettled – true once the escalation report has loaded (stops looping amber pulse)
+ * verdict      – the Bob Investigator verdict string ('fix_verified','fix_failed','needs_human')
  */
-function buildLadder(resolvedBy, isEscalated) {
+function buildLadder(resolvedBy, isEscalated, escalationSettled, verdict) {
   const container = document.getElementById('ladder');
   container.innerHTML = '';
 
-  // Determine which rungs were passed through and which was the resolution rung
   const resolvedIdx = RUNG_IDS.indexOf(resolvedBy);
 
   RUNGS.forEach((rung, i) => {
-    // ── vertical connector before this rung (except first) ──
+    // vertical connector before this rung (except first)
     if (i > 0) {
       const vline = document.createElement('div');
-      vline.className = 'rung-vline' + (i <= resolvedIdx ? ' active' : '');
+      vline.className = 'rung-vline' + (resolvedIdx >= 0 && i <= resolvedIdx ? ' active' : '');
       container.appendChild(vline);
     }
 
@@ -123,29 +127,45 @@ function buildLadder(resolvedBy, isEscalated) {
     node.textContent = rung.label;
 
     if (resolvedBy === null) {
-      // still loading — neutral
+      // still loading — neutral default state
     } else if (i < resolvedIdx) {
+      // passed through
       node.classList.add('passed');
     } else if (i === resolvedIdx) {
-      if (isEscalated && rung.id === 'escalate') {
-        node.classList.add('escalated');
+      if (rung.id === 'escalate' && isEscalated) {
+        // Bob Investigator rung: pulsing amber while loading, settled once report arrives
+        node.classList.add(escalationSettled ? 'escalated' : 'escalating');
+      } else if (rung.id === 'human' && verdict === 'needs_human') {
+        node.classList.add('human-active');
       } else {
         node.classList.add('resolved');
       }
+    } else {
+      // never reached — outline only
+      node.classList.add('unreached');
     }
-    // rungs after resolvedIdx stay outlined (default)
 
     // Horizontal connector
     const conn = document.createElement('div');
-    conn.className = 'rung-connector' + (i < resolvedIdx ? ' passed' : (i === resolvedIdx ? ' active' : ''));
+    conn.className = 'rung-connector' +
+      (resolvedIdx >= 0 && i < resolvedIdx ? ' passed' :
+       resolvedIdx >= 0 && i === resolvedIdx ? ' active' : '');
 
     // Status label
     const status = document.createElement('div');
     status.className = 'rung-status';
     if (resolvedBy !== null) {
-      if (i < resolvedIdx) status.textContent = 'passed';
-      else if (i === resolvedIdx) status.textContent = isEscalated && rung.id === 'escalate' ? 'escalated' : 'resolved ✓';
-      else status.textContent = '—';
+      if (i < resolvedIdx) {
+        status.textContent = 'passed';
+      } else if (i === resolvedIdx) {
+        if (rung.id === 'escalate' && isEscalated) {
+          status.textContent = escalationSettled ? 'settled' : 'escalating…';
+        } else {
+          status.textContent = 'resolved ✓';
+        }
+      } else {
+        status.textContent = '—';
+      }
     }
 
     row.appendChild(node);
@@ -192,7 +212,7 @@ function buildEvidence(evidence) {
 }
 
 // ── Escalation panel ─────────────────────────────────────────────────────────
-async function loadEscalation(ticketId) {
+async function loadEscalation(ticketId, resolvedBy) {
   const card = document.getElementById('escalation-card');
   const inner = document.getElementById('escalation-inner');
   card.classList.remove('hidden');
@@ -200,11 +220,14 @@ async function loadEscalation(ticketId) {
   try {
     const resp = await fetch(`/api/escalations/${encodeURIComponent(ticketId)}`);
     if (resp.status === 404) {
-      inner.innerHTML = '<span style="color:var(--text-muted)">Investigation pending — no report filed yet.</span>';
+      inner.innerHTML = '<span class="mute">Investigation pending — no report filed yet.</span>';
       return;
     }
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const r = await resp.json();
+
+    // Settle the ladder amber pulse now that the report has loaded
+    buildLadder(resolvedBy, true, true, r.verdict);
 
     const verdictClass = { fix_verified: 'fix-verified', fix_failed: 'fix-failed', needs_human: 'needs-human' }[r.verdict] || 'needs-human';
     const verdictLabel = { fix_verified: '✓ FIX VERIFIED', fix_failed: '✗ FIX FAILED', needs_human: '⚠ NEEDS HUMAN' }[r.verdict] || r.verdict;
@@ -215,10 +238,10 @@ async function loadEscalation(ticketId) {
       </div>
 
       <div class="card-title mt-16">Root Cause</div>
-      <p style="margin-bottom:16px">${esc(r.root_cause)}</p>
+      <p style="margin-bottom:16px;color:var(--mute)">${esc(r.root_cause)}</p>
 
       <div class="card-title">Patch Summary</div>
-      <p style="margin-bottom:16px">${esc(r.patch_summary)}</p>
+      <p style="margin-bottom:16px;color:var(--mute)">${esc(r.patch_summary)}</p>
 
       <div class="card-title">Files Examined</div>
       <div class="chip-row" style="margin-bottom:16px">
@@ -271,9 +294,10 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
     // Show result area
     document.getElementById('result-area').classList.remove('hidden');
 
-    // Build ladder
     const isEscalated = data.domain === 'escalated';
-    buildLadder(data.resolved_by, isEscalated);
+
+    // Build ladder — escalating pulse until report loads
+    buildLadder(data.resolved_by, isEscalated, false, null);
 
     // Voters
     buildVoters(data.voters);
@@ -284,9 +308,9 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
     // Elapsed
     document.getElementById('elapsed-row').textContent = `Elapsed: ${data.elapsed_ms} ms`;
 
-    // Escalation panel if needed
+    // Escalation panel: show with looping amber, then settle once report lands
     if (isEscalated) {
-      loadEscalation(data.ticket_id);
+      loadEscalation(data.ticket_id, data.resolved_by);
     }
 
   } catch (err) {
@@ -295,7 +319,7 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
       `<div class="card-title">Error</div><p style="color:var(--red)">${esc(String(err))}</p>`;
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Route Ticket';
+    btn.textContent = '▶ Route Ticket';
   }
 });
 </script>

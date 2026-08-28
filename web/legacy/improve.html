@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SentinelDesk — Improve</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f14;--panel:#111821;--panel2:#0e141b;--line:#1e2a36;--ink:#e6edf3;
+    --mute:#8a9aaa;--dim:#55677a;--signal:#3ddc84;--amber:#ffb454;--red:#ff5d5d;--blue:#5db4ff;--violet:#b48cff;
+    --mono:'JetBrains Mono',monospace;--display:'Fraunces',serif;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;
+    background-image:radial-gradient(circle at 50% -8%,rgba(93,180,255,.06),transparent 45%);}
+  header{padding:20px 28px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  header h1{font-family:var(--display);font-size:24px;font-weight:900;letter-spacing:-.02em}
+  header h1 em{color:var(--signal);font-style:italic}
+  header .sub{color:var(--mute);font-size:12px}
+  .tabs{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .tabs a{font-size:11px;color:var(--mute);text-decoration:none;border:1px solid var(--line);border-radius:7px;padding:6px 11px}
+  .tabs a:hover,.tabs a.active{border-color:var(--signal);color:var(--signal)}
+  .stage{max-width:1080px;margin:0 auto;padding:28px}
+  .lead{font-family:var(--display);font-size:22px;font-weight:600;margin-bottom:6px}
+  .lead em{color:var(--signal);font-style:italic}
+  .leadsub{color:var(--mute);font-size:12.5px;margin-bottom:20px;max-width:780px;line-height:1.6}
+  .run{background:var(--panel);color:var(--signal);border:1px solid var(--signal);border-radius:8px;
+    padding:10px 18px;font-family:var(--mono);font-size:13px;cursor:pointer}
+  .run:hover{box-shadow:0 0 16px rgba(61,220,132,.35)}
+  .run:disabled{color:var(--dim);border-color:var(--line);cursor:default;box-shadow:none}
+  .flow{margin-top:24px;display:flex;flex-direction:column;gap:12px}
+  .agent{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:14px 18px;
+    opacity:0;transform:translateY(8px);transition:opacity .45s ease,transform .45s ease,border-color .45s,box-shadow .45s}
+  .agent.show{opacity:1;transform:none}
+  .agent.fire{border-color:var(--signal);box-shadow:0 0 22px rgba(61,220,132,.28)}
+  .agent .hd{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .agent .ix{font-size:10px;color:var(--dim);letter-spacing:.18em}
+  .agent .nm{font-family:var(--display);font-size:17px;font-weight:600}
+  .agent .role{color:var(--mute);font-size:11px;margin-left:auto}
+  .agent .body{color:var(--mute);font-size:12px;line-height:1.7}
+  .kv b{color:var(--ink);font-weight:500}
+  .pill{display:inline-block;font-size:11px;padding:3px 9px;border-radius:7px;border:1px solid var(--line);
+    color:var(--blue);margin:3px 5px 0 0}
+  .up{color:var(--signal)} .down{color:var(--red)} .flag{color:var(--amber)}
+  .verdict{margin-top:18px;border-radius:12px;padding:16px 20px;border:1px solid var(--line);background:var(--panel2);display:none}
+  .verdict.show{display:block}
+  .verdict.acc{border-color:var(--signal)} .verdict.rej{border-color:var(--amber)}
+  .verdict h2{font-family:var(--display);font-size:20px;margin-bottom:6px}
+  .verdict.acc h2{color:var(--signal)} .verdict.rej h2{color:var(--amber)}
+  .note{margin-top:22px;color:var(--dim);font-size:11px;line-height:1.6;border-top:1px solid var(--line);padding-top:14px;max-width:840px}
+  .spin{color:var(--mute);font-size:12px;margin-top:14px;display:none}
+  table.dx{width:100%;border-collapse:collapse;margin-top:10px;font-size:11.5px}
+  table.dx th{text-align:left;color:var(--signal);font-size:9px;letter-spacing:.12em;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line)}
+  table.dx td{padding:6px 8px;border-bottom:1px solid var(--line);color:var(--mute);vertical-align:top}
+  table.dx tr.trip td{color:var(--ink)}
+  .modebar{display:flex;gap:8px;margin-bottom:14px}
+  .modebar button{background:var(--panel);color:var(--mute);border:1px solid var(--line);border-radius:8px;
+    padding:7px 14px;font-family:var(--mono);font-size:12px;cursor:pointer}
+  .modebar button.sel{border-color:var(--signal);color:var(--signal)}
+  .lg{width:100%;max-width:780px;margin:6px 0 18px;overflow:visible}
+  .lg .box{fill:var(--panel2);stroke:var(--line);stroke-width:1.5;transition:stroke .3s,filter .3s}
+  .lg text{fill:var(--mute);font-family:var(--mono);font-size:11px;font-weight:600;text-anchor:middle}
+  .lg .lbl{fill:var(--dim);font-size:9px;font-weight:500}
+  .lg .edge{stroke:var(--line);stroke-width:1.6;fill:none;transition:stroke .3s,opacity .3s,stroke-width .3s}
+  .lg .skip{stroke-dasharray:5 4}
+  .lg g.on .box{stroke:var(--signal);filter:drop-shadow(0 0 5px rgba(61,220,132,.55))}
+  .lg g.on text{fill:var(--ink)}
+  .lg g.skipd{opacity:.28}
+  .lg .edge.lit{stroke:var(--signal);stroke-width:2.4}
+  .lg .edge.dim{opacity:.18}
+  .lg .sub2{font-size:8px;fill:var(--dim);font-weight:500}
+  .lg g.art .box{stroke-dasharray:4 3;fill:var(--bg)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sentinel<em>Desk</em></h1>
+  <span class="sub">Improve — the agentic retraining loop</span>
+  <div class="tabs">
+    <a href="/">Console</a><a href="/explain">Explain</a><a href="/hybrid">Hybrid</a><a href="/vocab">Vocabulary</a><a href="/synonyms">Synonyms</a><a href="/learn">Live Learning</a><a href="/correct">Self-Correct</a><a href="/datagen">Data Gen</a><a href="/external">External</a><a href="/improve" class="active">Improve</a>
+  </div>
+</header>
+
+<div class="stage">
+  <div class="lead">A LangGraph that <em>takes different paths</em> depending on what it finds</div>
+  <div class="leadsub">Six agents over a shared state. They run a battery of data-quality tests; if a problem trips, the graph routes through the full retrain path; if the data is healthy, it takes the conditional edge straight to the judge and changes nothing. Pick the data the agents see, then run it.</div>
+
+  <div class="modebar">
+    <button id="m-hard" class="sel" onclick="setMode(true)">Induce class imbalance</button>
+    <button id="m-bal" onclick="setMode(false)">Balanced / healthy data</button>
+  </div>
+
+  <svg class="lg" viewBox="0 0 862 152" xmlns="http://www.w3.org/2000/svg">
+    <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="5.5" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#46586b"/></marker></defs>
+    <path id="e-dp" class="edge" marker-end="url(#ah)" d="M90,61 L122,61"/>
+    <path id="e-pr" class="edge" marker-end="url(#ah)" d="M212,61 L244,61"/>
+    <path id="e-rg" class="edge" marker-end="url(#ah)" d="M334,61 L366,61"/>
+    <path id="e-gv" class="edge" marker-end="url(#ah)" d="M456,61 L488,61"/>
+    <path id="e-vj" class="edge" marker-end="url(#ah)" d="M578,61 L610,61"/>
+    <path id="e-je" class="edge" marker-end="url(#ah)" d="M700,61 L732,61"/>
+    <path id="e-skip" class="edge skip" marker-end="url(#ah)" d="M170,78 C 280,140 540,140 652,80"/>
+    <text class="lbl" x="228" y="50">problems</text>
+    <text class="lbl" x="414" y="148">healthy &#8594; skip</text>
+    <g id="n-diagnose" class="node"><rect class="box" x="6" y="44" width="84" height="34" rx="8"/><text x="48" y="65">diagnose</text></g>
+    <g id="n-plan" class="node"><rect class="box" x="128" y="44" width="84" height="34" rx="8"/><text x="170" y="65">plan</text></g>
+    <g id="n-retrain" class="node"><rect class="box" x="250" y="44" width="84" height="34" rx="8"/><text x="292" y="65">retrain</text></g>
+    <g id="n-ground" class="node"><rect class="box" x="372" y="44" width="84" height="34" rx="8"/><text x="414" y="65">ground</text></g>
+    <g id="n-validate" class="node"><rect class="box" x="494" y="44" width="84" height="34" rx="8"/><text x="536" y="65">validate</text></g>
+    <g id="n-judge" class="node"><rect class="box" x="616" y="44" width="84" height="34" rx="8"/><text x="658" y="65">judge</text></g>
+    <g id="n-svm" class="node art"><rect class="box" x="734" y="42" width="106" height="40" rx="8"/><text x="787" y="58">SVM</text><text x="787" y="71" class="sub2">candidate.pkl</text></g>
+  </svg>
+
+  <button class="run" id="run" onclick="runLoop()">▶ Run agentic loop</button>
+  <div class="spin" id="spin">agents running…</div>
+
+  <div class="flow" id="flow"></div>
+  <div class="verdict" id="verdict"></div>
+
+  <div class="note">Isolated by design — reads data read-only, writes only to <b>improvement/out/</b>, never touches the production model or live router. The conditional edge after <b>plan</b> is a real LangGraph branch: with problems it retrains and, only if it validates better, writes <b>svm_candidate.pkl</b>; with healthy data the baseline is already at ceiling, so it skips straight to the judge and leaves the model unchanged.</div>
+</div>
+
+<script>
+const AG = [
+  {k:"01_diagnose", nm:"diagnose", role:"run tests · baseline",
+   render:d=>{
+     const rows=d.checks.map(c=>`<tr class="${c.triggered?'trip':'ok'}"><td>${c.problem}</td><td>${c.test}</td><td>${c.value}</td><td>${c.triggered?'<span class="flag">TRIPPED</span>':'<span class="up">ok</span>'}</td><td>${c.triggered?c.remedy:'—'}</td></tr>`).join("");
+     return `baseline macro-F1 <b>${d.baseline_metrics.macro_f1}</b>, minority recall <b>${d.baseline_metrics.min_class_recall}</b> over ${d.n_train} tickets`
+       +`<table class="dx"><thead><tr><th>Problem</th><th>Test</th><th>Value</th><th>Status</th><th>Remedy</th></tr></thead><tbody>${rows}</tbody></table>`;
+   }},
+  {k:"02_plan", nm:"plan", role:"map problems → remedies",
+   render:d=> d.remedies.length ? d.remedies.map(r=>`• <b>${r.problem}</b> → ${r.remedy}`).join("<br>") : "no remedies needed"},
+  {k:"03_retrain", nm:"retrain", role:"apply remedies · train",
+   render:d=>`applied ${d.remedies_applied.map(t=>`<span class="pill">${t}</span>`).join("")}${d.smote_k_neighbors?` · SMOTE k=${d.smote_k_neighbors}`:''}<br>${d.train_rows_used} rows · <b>${d.n_features}</b> features · fit ${d.fit_seconds}s`},
+  {k:"04_ground_rag", nm:"ground (RAG)", role:"retrieve evidence",
+   render:d=>{const e=d.examples[0];return `<b>${d.method}</b><br>query: <i>"${e.query}"</i> (true: ${e.true_domain})<br>`+e.retrieved.map(r=>`&nbsp;&nbsp;↳ ${r.domain} <span style="color:var(--dim)">(${r.similarity})</span>`).join("<br>")+`<br>evidence → <b>${e.evidence_domain}</b>`;}},
+  {k:"05_validate", nm:"validate", role:"held-out, candidate vs base",
+   render:d=>{const f=(x)=>x>0?`<span class="up">+${x}</span>`:(x<0?`<span class="down">${x}</span>`:`${x}`);
+     return `macro-F1 <b>${d.baseline.macro_f1}</b> → <b>${d.candidate.macro_f1}</b> (${f(d.deltas.macro_f1)})<br>minority recall <b>${d.baseline.min_class_recall}</b> → <b>${d.candidate.min_class_recall}</b> (${f(d.deltas.min_class_recall)})<br>accuracy <b>${d.baseline.accuracy}</b> → <b>${d.candidate.accuracy}</b> (${f(d.deltas.accuracy)})`;}},
+  {k:"06_decision", nm:"judge", role:"accept if improved",
+   render:d=>`${d.accept?'<span class="up">ACCEPT</span>':'<span class="flag">REJECT</span>'} — ${d.reason}${d.model_written?'<br>wrote <b>'+d.model_written.split(/[\\\\/]/).pop()+'</b>':''}`},
+];
+
+let INDUCE=true;
+const NODE={'01_diagnose':'diagnose','02_plan':'plan','03_retrain':'retrain','04_ground_rag':'ground','05_validate':'validate','06_decision':'judge'};
+const INEDGE={plan:'e-dp',retrain:'e-pr',ground:'e-rg',validate:'e-gv'};
+const fmt=x=>(x>=0?'+':'')+x;
+const lite=id=>{const e=document.getElementById(id); if(e) e.classList.add('lit');};
+const dimE=id=>{const e=document.getElementById(id); if(e) e.classList.add('dim');};
+
+function setMode(v){
+  INDUCE=v;
+  document.getElementById('m-hard').classList.toggle('sel',v);
+  document.getElementById('m-bal').classList.toggle('sel',!v);
+  resetGraph();
+}
+function resetGraph(){
+  document.querySelectorAll('.lg g.node').forEach(g=>g.classList.remove('on','skipd'));
+  document.querySelectorAll('.lg .edge').forEach(e=>e.classList.remove('lit','dim'));
+  document.getElementById('flow').innerHTML='';
+  document.getElementById('verdict').className='verdict';
+}
+
+async function runLoop(){
+  const btn=document.getElementById('run'), spin=document.getElementById('spin');
+  const flow=document.getElementById('flow'), verdict=document.getElementById('verdict');
+  resetGraph(); btn.disabled=true; spin.style.display='block';
+  let data;
+  try{ const r=await fetch('/api/improve/run?induce='+INDUCE,{method:'POST'}); data=await r.json(); }
+  catch(e){ spin.textContent='could not reach /api/improve/run — server running with langgraph + imbalanced-learn?'; btn.disabled=false; return; }
+  spin.style.display='none';
+  const skip = data.path==='skip';
+  if(skip){ ['retrain','ground','validate'].forEach(n=>document.getElementById('n-'+n).classList.add('skipd'));
+            ['e-pr','e-rg','e-gv','e-vj'].forEach(dimE); }
+  else { dimE('e-skip'); }
+  const present = AG.filter(a=>data[a.k]);
+  present.forEach((a,i)=>{
+    setTimeout(()=>{
+      const idx=AG.indexOf(a)+1;
+      const el=document.createElement('div'); el.className='agent';
+      el.innerHTML=`<div class="hd"><span class="ix">0${idx}</span><span class="nm">${a.nm}</span><span class="role">${a.role}</span></div><div class="body">${a.render(data[a.k])}</div>`;
+      flow.appendChild(el);
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{el.classList.add('show','fire'); setTimeout(()=>el.classList.remove('fire'),900);}));
+      const node=NODE[a.k];
+      document.getElementById('n-'+node).classList.add('on');
+      if(node==='judge') lite(skip?'e-skip':'e-vj');
+      else if(INEDGE[node]) lite(INEDGE[node]);
+    }, i*820);
+  });
+  setTimeout(()=>{
+    lite('e-je');
+    const dec=data['06_decision'];
+    if(dec.model_written) document.getElementById('n-svm').classList.add('on');
+    verdict.className='verdict show '+(dec.accept?'acc':'rej');
+    const h=dec.accept?'Candidate accepted':(skip?'No change needed':'Candidate rejected');
+    verdict.innerHTML=`<h2>${h}</h2><div style="color:var(--mute)">path: <b>${data.path||'retrain'}</b> · macro-F1 Δ ${fmt(dec.deltas.macro_f1)} · minority-recall Δ ${fmt(dec.deltas.min_class_recall)} · accuracy Δ ${fmt(dec.deltas.accuracy)}</div><div style="color:var(--dim);margin-top:6px">${dec.reason}</div>`;
+    btn.disabled=false;
+  }, present.length*820+450);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SentinelDesk — External Validation</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f14;--panel:#111821;--panel2:#0e141b;--line:#1e2a36;--ink:#e6edf3;
+    --mute:#8a9aaa;--dim:#55677a;--signal:#3ddc84;--amber:#ffb454;--red:#ff5d5d;--blue:#5db4ff;--violet:#b48cff;
+    --mono:'JetBrains Mono',monospace;--display:'Fraunces',serif;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;
+    background-image:radial-gradient(circle at 50% -8%,rgba(93,180,255,.06),transparent 45%);}
+  header{padding:20px 28px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header h1{font-family:var(--display);font-size:24px;font-weight:900;letter-spacing:-.02em}
+  header h1 em{color:var(--signal);font-style:italic}
+  header .sub{color:var(--mute);font-size:12px}
+  .controls{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .tabs{display:flex;gap:8px}
+  .tabs a{font-size:11px;color:var(--mute);text-decoration:none;border:1px solid var(--line);border-radius:7px;padding:6px 11px}
+  .tabs a:hover{border-color:var(--signal);color:var(--signal)}
+  .run{background:var(--signal);color:#063;border:none;border-radius:8px;padding:9px 16px;font-family:var(--mono);font-size:12px;font-weight:700;cursor:pointer}
+  .run:disabled{opacity:.5}
+  .stage{max-width:1000px;margin:0 auto;padding:20px 24px 80px}
+  .tagline{font-family:var(--display);font-size:17px;color:var(--mute);font-style:italic;margin-bottom:6px}
+  .tagline b{color:var(--ink);font-style:normal}
+  .meta{color:var(--dim);font-size:11.5px;margin-bottom:16px}
+  .headline{background:linear-gradient(135deg,rgba(61,220,132,.12),rgba(93,180,255,.06));border:1px solid var(--signal);
+    border-radius:14px;padding:20px 24px;margin-bottom:18px;display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;
+    opacity:0;transform:translateY(8px);transition:.5s}
+  .headline.in{opacity:1;transform:none}
+  .headline .big{font-family:var(--display);font-size:46px;font-weight:900;color:var(--signal);line-height:1}
+  .headline .lbl{font-size:12px;color:var(--mute);line-height:1.5}
+  .headline .lbl b{color:var(--ink)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;
+    opacity:0;transform:translateY(8px);transition:.5s}
+  .card.in{opacity:1;transform:none}
+  .card h3{font-family:var(--display);font-size:14px;font-weight:600;margin-bottom:10px}
+  .row{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:12px}
+  .row .dn{min-width:150px;color:var(--ink)}
+  .row .track{flex:1;background:var(--panel2);border-radius:6px;height:18px;position:relative;overflow:hidden}
+  .row .fill{height:100%;border-radius:6px;transition:width .9s cubic-bezier(.2,.8,.2,1)}
+  .row .pct{min-width:84px;text-align:right;color:var(--mute)}
+  .row.small .dn,.row.small .pct{color:var(--dim)}
+  .flag{font-size:9px;color:var(--dim);margin-left:6px}
+  .conf{display:flex;gap:24px;flex-wrap:wrap}
+  .conf .stat{text-align:center}
+  .conf .v{font-family:var(--display);font-size:28px;font-weight:700;color:var(--blue)}
+  .conf .k{font-size:10px;color:var(--mute)}
+  .miss{font-size:11.5px;color:var(--mute);margin:4px 0}
+  .miss b{color:var(--ink)}
+  .miss .to{color:var(--amber)}
+  .samp{font-size:11px;border-bottom:1px solid var(--line);padding:6px 0}
+  .samp .ok{color:var(--signal)} .samp .x{color:var(--red)}
+  .samp .t{color:var(--mute)} .samp .p{color:var(--dim);margin-left:18px}
+  .note{background:rgba(255,180,84,.07);border:1px solid #443;border-radius:8px;padding:11px 13px;font-size:11px;color:var(--amber);margin-top:8px;line-height:1.55}
+  .status{max-width:1000px;margin:0 auto;padding:0 24px;color:var(--dim);font-size:12px}
+  .spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--signal);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sentinel<em>Desk</em></h1>
+  <span class="sub">External Validation — real third-party tickets the model never saw</span>
+  <div class="controls">
+    <div class="tabs"><a href="/">Console</a><a href="/explain">Explain</a><a href="/hybrid">Hybrid</a><a href="/datagen">Data Gen</a><a href="/synonyms">Synonyms</a><a href="/audit">Audit</a></div>
+    <button class="run" id="go" onclick="run()">▶ Run benchmark</button>
+  </div>
+</header>
+<div class="status" id="status">ready</div>
+
+<div class="stage">
+  <div class="tagline"><b>Trained on synthetic data — does it generalize to real tickets?</b> This scores the model live on a curated set of real Zenodo tickets.</div>
+  <div class="meta" id="meta"></div>
+  <div id="results"></div>
+</div>
+
+<script>
+const API=location.origin, $=id=>document.getElementById(id);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function esc(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function color(acc){ return acc>=0.9?'var(--signal)':acc>=0.7?'var(--amber)':'var(--red)'; }
+
+async function appendCard(html, cls){
+  const wrap=document.createElement('div'); wrap.innerHTML=html;
+  const el=wrap.firstElementChild; $('results').appendChild(el);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('in')));
+  await sleep(550);
+  return el;
+}
+
+async function run(){
+  $('go').disabled=true; $('results').innerHTML=''; $('meta').textContent='';
+  $('status').innerHTML='scoring the model on the real benchmark <span class="spinner"></span>';
+  let d;
+  try{ d=await (await fetch(API+'/api/external')).json(); }
+  catch(e){ $('status').innerHTML='<span style="color:var(--red)">backend not running</span>'; $('go').disabled=false; return; }
+  if(d.error){ $('status').innerHTML='<span style="color:var(--red)">benchmark/model missing — run external_test/build_dataset.py + train</span>'; $('go').disabled=false; return; }
+  $('status').textContent='';
+  $('meta').textContent=`${d.total} real, readable, single-domain tickets · source: ${d.source}`;
+
+  // headline
+  const h=d.headline;
+  await appendCard(`<div class="headline"><div class="big">${(h.acc*100).toFixed(1)}%</div>
+    <div class="lbl">accuracy on the <b>trustworthy</b> subset<br>${h.ok}/${h.n} tickets · domains with n&ge;${d.min_n}: <b>${h.domains.join(', ')}</b></div></div>`);
+
+  // per-domain bars
+  let bars='<div class="card"><h3>Per-domain accuracy</h3>';
+  d.per_domain.forEach(p=>{
+    const cls=p.trustworthy?'':' small';
+    bars+=`<div class="row${cls}"><div class="dn">${esc(p.domain)}</div>
+      <div class="track"><div class="fill" style="width:0%;background:${color(p.acc)}" data-w="${Math.round(p.acc*100)}"></div></div>
+      <div class="pct">${p.ok}/${p.n} · ${(p.acc*100).toFixed(0)}%${p.trustworthy?'':'<span class="flag">n too small</span>'}</div></div>`;
+  });
+  bars+='</div>';
+  const bc=await appendCard(bars);
+  // animate bar fills
+  bc.querySelectorAll('.fill').forEach(f=>{ requestAnimationFrame(()=>{ f.style.width=f.dataset.w+'%'; }); });
+  await sleep(400);
+
+  // confidence
+  const c=d.confidence;
+  await appendCard(`<div class="card"><h3>Confidence on real text</h3>
+    <div class="conf">
+      <div class="stat"><div class="v">${c.mean.toFixed(2)}</div><div class="k">mean confidence<br>(synthetic ~0.93)</div></div>
+      <div class="stat"><div class="v">${(c.over_80_pct*100).toFixed(0)}%</div><div class="k">clear the 0.80 gate<br>(${c.over_80}/${c.total})</div></div>
+    </div>
+    <div class="note">On real text the model is appropriately <b>less</b> certain — only ${(c.over_80_pct*100).toFixed(0)}% clear the gate, so most real tickets would be routed by the voter ladder or escalated rather than confidently auto-resolved. It knows when it's on unfamiliar ground.</div></div>`);
+
+  // confusion
+  let conf='<div class="card"><h3>Where the misses went</h3>';
+  d.confusion.forEach(cf=>{
+    conf+=`<div class="miss"><b>${esc(cf.domain)}</b> &rarr; ${cf.misses.map(m=>`<span class="to">${esc(m.to)} (${m.n})</span>`).join(', ')}</div>`;
+  });
+  conf+='<div class="note">Access-Management confusions go to Network/Security — identity tickets share vocabulary with those domains (VPN access, login/firewall), the expected weak spot for a lexical-first classifier.</div></div>';
+  await appendCard(conf);
+
+  // samples
+  let samp='<div class="card"><h3>Sample predictions (real tickets)</h3>';
+  Object.entries(d.samples).forEach(([dom,arr])=>{
+    arr.forEach(sx=>{
+      samp+=`<div class="samp"><span class="${sx.ok?'ok':'x'}">[${sx.ok?'OK':'X '}]</span> <span style="color:var(--dim)">(${esc(dom)})</span> <span class="t">${esc(sx.text)}</span><div class="p">&rarr; ${esc(sx.pred)} (${(sx.conf*100).toFixed(0)}%)</div></div>`;
+    });
+  });
+  samp+='</div>';
+  await appendCard(samp);
+
+  // honest scope
+  await appendCard(`<div class="card"><h3>Honest scope</h3>
+    <div class="note" style="color:var(--mute);background:transparent;border-color:var(--line)">
+    This is an <b>optimistic slice</b> — real tickets curated to readable, single-domain English (selected by content, never by the model's prediction), with <b>keyword-derived (weak-supervision)</b> labels. It is honest evidence of generalization on clear-signal tickets, <b>not</b> whole-dataset accuracy. Only Network and Access Management had n&ge;${d.min_n}. A larger pre-tokenized dataset scored ~36% (format mismatch) and is not cited as accuracy.</div></div>`);
+
+  $('go').disabled=false;
+  $('status').innerHTML='<span style="color:var(--dim)">scored live from external_test/zenodo_clean.csv</span>';
+}
+fetch(API+'/api/tickets').then(r=>r.json()).then(()=>{$('status').textContent='ready — click Run benchmark';})
+  .catch(()=>{$('status').innerHTML='<span style="color:var(--red)">backend not running</span>';});
+</script>
+</body>
+</html>

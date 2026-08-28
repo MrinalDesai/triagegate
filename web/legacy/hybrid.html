@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SentinelDesk — Hybrid Retrieval</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f14;--panel:#111821;--panel2:#0e141b;--line:#1e2a36;--ink:#e6edf3;
+    --mute:#8a9aaa;--dim:#55677a;--signal:#3ddc84;--amber:#ffb454;--red:#ff5d5d;--blue:#5db4ff;--violet:#b48cff;
+    --mono:'JetBrains Mono',monospace;--display:'Fraunces',serif;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;
+    background-image:radial-gradient(circle at 50% -10%,rgba(93,180,255,.06),transparent 45%);}
+  header{padding:20px 28px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  header h1{font-family:var(--display);font-size:24px;font-weight:900;letter-spacing:-.02em}
+  header h1 em{color:var(--signal);font-style:italic}
+  header .sub{color:var(--mute);font-size:12px}
+  .controls{margin-left:auto;display:flex;gap:10px;align-items:center}
+  label.fast{font-size:11px;color:var(--mute)}
+  .run{background:var(--signal);color:#063;border:none;border-radius:8px;padding:9px 18px;font-family:var(--mono);font-size:12px;font-weight:700;cursor:pointer}
+  .run:disabled{opacity:.5;cursor:default}
+  .stage{max-width:1020px;margin:0 auto;padding:26px 24px 80px}
+  .tagline{font-family:var(--display);font-size:18px;color:var(--mute);font-style:italic;margin-bottom:18px}
+  .tagline b{color:var(--ink);font-style:normal}
+  .ticketbar{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-bottom:18px}
+  .ticketbar .lbl{font-size:10px;letter-spacing:.25em;color:var(--blue);text-transform:uppercase}
+  .ticketbar input{width:100%;background:transparent;border:none;color:var(--ink);font-family:var(--mono);font-size:14px;margin-top:6px;outline:none}
+  .quick{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .quick button{background:var(--panel2);border:1px solid var(--line);color:var(--mute);border-radius:14px;padding:5px 12px;font-size:11px;cursor:pointer}
+  .quick button:hover{border-color:var(--blue);color:var(--blue)}
+
+  .verdict{padding:16px 18px;border-radius:12px;background:rgba(61,220,132,.08);border:1px solid #1f6b45;margin-bottom:18px}
+  .verdict .v{font-family:var(--display);font-size:26px;font-weight:700;color:var(--signal)}
+  .verdict .s{font-size:12px;color:var(--mute);margin-top:4px}
+
+  .rankers{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .ranker{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;border-top:3px solid var(--dim)}
+  .ranker.bm25{border-top-color:var(--amber)} .ranker.sem{border-top-color:var(--blue)} .ranker.graph{border-top-color:var(--violet)}
+  .ranker h3{font-family:var(--display);font-size:15px;font-weight:600;margin-bottom:4px}
+  .ranker .eng{font-size:10px;color:var(--dim);margin-bottom:12px;word-break:break-all}
+  .hit{padding:8px 0;border-bottom:1px dashed var(--line);font-size:11.5px}
+  .hit:last-child{border-bottom:none}
+  .hit .cat{color:var(--ink);font-weight:500} .hit .sc{color:var(--dim);float:right}
+  .hit .tx{color:var(--mute);font-size:10.5px;margin-top:2px;line-height:1.4}
+  .none{color:var(--dim);font-style:italic;font-size:11px}
+
+  .fusion{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px}
+  .fusion h3{font-family:var(--display);font-size:15px;font-weight:600;margin-bottom:10px}
+  .barrow{display:flex;align-items:center;gap:10px;margin-bottom:7px;font-size:12px}
+  .barrow .nm{width:140px;color:var(--mute)}
+  .barrow .track{flex:1;height:14px;background:var(--panel2);border-radius:7px;overflow:hidden}
+  .barrow .track > i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--signal));border-radius:7px}
+  .barrow .vv{width:54px;text-align:right;color:var(--ink)}
+  .status{max-width:1020px;margin:0 auto;padding:0 24px;color:var(--dim);font-size:12px}
+  .tabs{display:flex;gap:8px}
+  .tabs a{font-size:11px;color:var(--mute);text-decoration:none;border:1px solid var(--line);border-radius:7px;padding:6px 11px}
+  .tabs a:hover{border-color:var(--signal);color:var(--signal)}
+  .spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--signal);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(max-width:780px){.rankers{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sentinel<em>Desk</em></h1>
+  <span class="sub">Hybrid Retrieval — BM25 + semantic + Graph RAG, fused</span>
+  <div class="controls">
+    <div class="tabs"><a href="/">Console</a><a href="/explain">Explain</a><a href="/vocab">Vocabulary</a><a href="/synonyms">Synonyms</a><a href="/learn">Live Learning</a><a href="/correct">Self-Correct</a><a href="/datagen">Data Gen</a><a href="/external">External</a></div>
+    <label class="fast"><input type="checkbox" id="fast" checked> fast model</label>
+    <button class="run" id="go" onclick="run()">▶ Retrieve</button>
+  </div>
+</header>
+
+<div class="status" id="status"></div>
+
+<div class="stage">
+  <div class="tagline"><b>Deterministic where it counts, semantic where it helps.</b> Three retrievers rank the ticket independently; reciprocal-rank fusion settles it.</div>
+
+  <div class="ticketbar">
+    <div class="lbl">Ticket</div>
+    <input id="ticket" value="users can't reach internal websites across the office">
+    <div class="quick" id="quick"></div>
+  </div>
+
+  <div id="result"></div>
+</div>
+
+<script>
+const API=location.origin, $=id=>document.getElementById(id);
+const QUICK=[
+  "deadlock on the primary database replica overnight",
+  "users can't reach internal websites across the office",
+  "ransomware encrypting files on a finance workstation",
+  "okta single sign-on intermittently failing for new joiners",
+];
+const qb=$('quick');
+QUICK.forEach(q=>{const b=document.createElement('button');b.textContent=q.slice(0,38)+'…';b.onclick=()=>{$('ticket').value=q;run();};qb.appendChild(b);});
+
+const CLS={"BM25 (rank-bm25)":"bm25"};
+function rankerClass(name){ if(name.startsWith("BM25"))return"bm25"; if(name.startsWith("Qdrant"))return"sem"; if(name.startsWith("Graph"))return"graph"; return""; }
+
+function run(){
+  $('go').disabled=true;
+  $('status').innerHTML='running hybrid retrieval <span class="spinner"></span> <span style="color:var(--dim)">(first run loads the embedding model — may take a moment)</span>';
+  $('result').innerHTML='';
+  fetch(API+'/api/hybrid',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text:$('ticket').value, fast:$('fast').checked})})
+    .then(r=>r.json()).then(d=>{
+      $('go').disabled=false;
+      if(d.error){$('status').innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+      $('status').innerHTML='embedder: '+d.embedder;
+      let h='';
+      // verdict
+      h+=`<div class="verdict"><div class="v">→ ${d.category||'—'}</div>
+           <div class="s">fused score ${d.confidence} · reciprocal-rank fusion of three retrievers</div></div>`;
+      // three rankers
+      h+='<div class="rankers">';
+      for(const [name,items] of Object.entries(d.per_ranker)){
+        h+=`<div class="ranker ${rankerClass(name)}"><h3>${name.split('(')[0].split('+')[0].trim()}</h3>
+            <div class="eng">${name}</div>`;
+        if(!items.length) h+='<div class="none">— no result (abstains) —</div>';
+        items.forEach(i=>{ h+=`<div class="hit"><span class="cat">${i.category}</span><span class="sc">${i.score}</span>
+            <div class="tx">${i.text||''}</div></div>`; });
+        h+='</div>';
+      }
+      h+='</div>';
+      // fusion ranking bars
+      if(d.ranking&&d.ranking.length){
+        const max=d.ranking[0][1]||1;
+        h+='<div class="fusion"><h3>Fused ranking (RRF)</h3>';
+        d.ranking.forEach(([cat,sc])=>{ h+=`<div class="barrow"><span class="nm">${cat}</span>
+            <span class="track"><i style="width:${Math.round(sc/max*100)}%"></i></span>
+            <span class="vv">${sc}</span></div>`; });
+        h+='</div>';
+      }
+      $('result').innerHTML=h;
+    }).catch(e=>{$('go').disabled=false;$('status').innerHTML='<span style="color:var(--red)">error: '+e+'</span>';});
+}
+fetch(API+'/api/tickets').then(r=>r.json()).then(()=>{$('status').textContent='ready — type a ticket and Retrieve';})
+  .catch(()=>{$('status').innerHTML='<span style="color:var(--red)">backend not running</span> — start: python web/server.py';});
+</script>
+</body>
+</html>

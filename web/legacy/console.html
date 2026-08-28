@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SentinelDesk — Live Console</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f14;--panel:#111821;--panel2:#0e141b;--line:#1e2a36;--ink:#e6edf3;
+    --mute:#7d8c9c;--dim:#4a5a6a;--signal:#3ddc84;--amber:#ffb454;--red:#ff5d5d;--blue:#5db4ff;--violet:#b48cff;
+    --mono:'JetBrains Mono',monospace;--display:'Fraunces',serif;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;
+    background-image:radial-gradient(circle at 12% 8%,rgba(61,220,132,.05),transparent 42%);}
+  header{padding:22px 28px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+  header h1{font-family:var(--display);font-size:26px;font-weight:900;letter-spacing:-.02em}
+  header h1 em{color:var(--signal);font-style:italic}
+  header .sub{color:var(--mute);font-size:12px}
+  header .tabs{margin-left:auto;display:flex;gap:8px}
+  header .tabs a{font-size:11px;color:var(--mute);text-decoration:none;border:1px solid var(--line);border-radius:7px;padding:6px 11px}
+  header .tabs a:hover{border-color:var(--signal);color:var(--signal)}
+  header .tabs a.cur{border-color:var(--signal);color:var(--signal);background:rgba(61,220,132,.08)}
+  header .status{font-size:11px;color:var(--dim);margin-left:14px}
+  .layout{display:grid;grid-template-columns:340px 1fr;gap:0;min-height:calc(100vh - 67px)}
+  .left{border-right:1px solid var(--line);padding:20px;overflow-y:auto;max-height:calc(100vh - 67px)}
+  .right{padding:24px 28px;overflow-y:auto;max-height:calc(100vh - 67px)}
+  h3{font-family:var(--display);font-size:16px;font-weight:600;margin:0 0 12px}
+  .eyebrow{font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--signal);margin:22px 0 10px}
+  .eyebrow:first-child{margin-top:0}
+
+  textarea,input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+    color:var(--ink);font-family:var(--mono);font-size:12px;padding:10px;resize:vertical}
+  textarea{min-height:64px}
+  button{font-family:var(--mono);cursor:pointer;border:1px solid var(--line);background:var(--panel);
+    color:var(--ink);border-radius:8px;padding:9px 12px;font-size:12px;transition:.2s;width:100%;text-align:left}
+  button:hover{border-color:var(--signal);color:var(--signal)}
+  button.run{background:var(--signal);color:#071;border-color:var(--signal);font-weight:700;text-align:center;margin-top:10px}
+  button.run:hover{color:#040}
+  .ticket{padding:9px 11px;margin-bottom:7px;font-size:11.5px;line-height:1.4}
+  .ticket .c{color:var(--dim);font-size:10px}
+  .expbtn{margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .expbtn .tg{font-size:9px;padding:2px 6px;border-radius:10px;border:1px solid var(--line);color:var(--mute);flex:none}
+
+  /* layer cards */
+  .layer{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--dim);
+    border-radius:10px;padding:14px 16px;margin-bottom:12px;opacity:0;transform:translateY(6px);
+    animation:rise .4s forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .layer.active{border-left-color:var(--signal)}
+  .layer.warn{border-left-color:var(--amber)} .layer.bad{border-left-color:var(--red)}
+  .layer .h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .layer .name{font-family:var(--display);font-size:15px;font-weight:600}
+  .layer .badge{font-size:10px;padding:2px 9px;border-radius:12px;border:1px solid var(--line);color:var(--mute)}
+  .layer .badge.ok{color:var(--signal);border-color:#1f6b45} .layer .badge.w{color:var(--amber)} .layer .badge.b{color:var(--red)}
+  .layer .body{font-size:12px;color:var(--mute);line-height:1.6}
+  .layer .body b{color:var(--ink);font-weight:500} .layer .body .k{color:var(--blue)}
+  .verdict{padding:16px;border-radius:10px;font-family:var(--display);font-size:22px;font-weight:600;margin:6px 0 18px}
+  .v-resolve{background:rgba(61,220,132,.1);border:1px solid #1f6b45;color:var(--signal)}
+  .v-escalate{background:rgba(255,180,84,.08);border:1px solid #443;color:var(--amber)}
+  .v-safety{background:rgba(255,93,93,.08);border:1px solid #533;color:var(--red)}
+  pre{background:#070b0f;border:1px solid var(--line);border-radius:10px;padding:16px;font-size:11.5px;
+    line-height:1.5;white-space:pre-wrap;color:var(--mute);max-height:60vh;overflow:auto}
+  .hint{color:var(--dim);font-size:11px;margin-top:6px}
+  .spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--signal);
+    border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(max-width:860px){.layout{grid-template-columns:1fr}.left{border-right:none;border-bottom:1px solid var(--line);max-height:none}}
+  /* agent flow strip */
+  .aflow{display:flex;align-items:stretch;gap:0;margin:0 0 18px;flex-wrap:wrap}
+  .anode{flex:1;min-width:96px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;position:relative;opacity:.4;transition:.45s;transform:translateY(4px)}
+  .anode.in{opacity:1;transform:none}
+  .anode.active{border-color:var(--signal);box-shadow:0 0 0 1px var(--signal),0 0 26px rgba(61,220,132,.4);transform:translateY(-3px) scale(1.03)}
+  .anode.done{opacity:.7}
+  .anode.skipped{opacity:.28;border-style:dashed}
+  .anode.terminal.active{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue),0 0 26px rgba(93,180,255,.4)}
+  .anode .an{font-family:var(--display,'Fraunces',serif);font-size:14px;font-weight:600;color:var(--ink)}
+  .anode .ar{font-size:10px;color:var(--mute);margin-top:3px;line-height:1.35;min-height:24px}
+  .anode .num{position:absolute;top:6px;right:9px;font-size:9px;color:var(--dim)}
+  .aarrow{display:flex;align-items:center;color:var(--dim);font-size:14px;padding:0 4px}
+  @media(max-width:720px){.aarrow{display:none}.anode{min-width:46%}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sentinel<em>Desk</em></h1>
+  <span class="sub">Live console — every layer runs your real pipeline</span>
+  <div class="tabs"><a href="/improve">Improve</a>
+    <a href="/" class="cur">Console</a>
+    <a href="/explain">Explain</a>
+    <a href="/hybrid">Hybrid</a>
+    <a href="/vocab">Vocabulary</a><a href="/synonyms">Synonyms</a>
+    <a href="/learn">Live Learning</a>
+    <a href="/audit">Audit</a><a href="/external">External</a>
+    <a href="/correct">Self-Correct</a><a href="/datagen">Data Gen</a>
+  </div>
+  <span class="status" id="status">connecting…</span>
+</header>
+
+<div class="layout">
+  <!-- LEFT: inputs + experiment buttons -->
+  <div class="left">
+    <div class="eyebrow">Run a ticket</div>
+    <textarea id="title" placeholder="Title (optional)"></textarea>
+    <textarea id="desc" placeholder="Describe the issue… or pick a real ticket below"></textarea>
+    <button class="run" onclick="runTicket()">▶ Run through all layers</button>
+
+    <div class="eyebrow">Demo cases (one click)</div>
+    <div id="democases"></div>
+
+    <div class="eyebrow">Pick a real ticket (real_3000)</div>
+    <div id="tickets"><span class="hint">loading…</span></div>
+
+    <div class="eyebrow">Experiments — run on demand</div>
+    <div id="experiments"></div>
+  </div>
+
+  <!-- RIGHT: results -->
+  <div class="right" id="out">
+    <h3>Pick or type a ticket, then “Run through all layers”.</h3>
+    <p class="hint">Each layer below will show its real output: safety gate → synonym normalization →
+    SVM (with/without normalization) → scorer → kNN → edge-case resolver → Graph RAG → reasoning chain → verdict.
+    The experiment buttons run the actual ablation/accuracy/PII scripts and show real output — for when a judge asks.</p>
+  </div>
+</div>
+
+<script>
+const API = location.origin;  // served by FastAPI
+const $ = id => document.getElementById(id);
+
+// connection check
+fetch(API+'/api/tickets').then(r=>r.json()).then(ts=>{
+  $('status').innerHTML = '<span style="color:var(--signal)">● live</span> · '+ts.length+' tickets loaded';
+  const box=$('tickets'); box.innerHTML='';
+  ts.slice(0,40).forEach(t=>{
+    const b=document.createElement('button'); b.className='ticket';
+    b.innerHTML=`${(t.title||t.text).slice(0,52)}<div class="c">truth: ${t.truth||'?'}</div>`;
+    b.onclick=()=>{$('title').value=t.title||''; $('desc').value=t.text||''; runTicket();};
+    box.appendChild(b);
+  });
+}).catch(()=>{ $('status').innerHTML='<span style="color:var(--red)">● backend not running</span> — start: python web/server.py'; });
+
+// demo-case presets — each shows a different path
+const DEMOS=[
+  ["Confident → Database","primary replica deadlock","connection pool exhausted overnight"],
+  ["Safety → SOC (bypass)","data breach in progress","attacker exfiltrating customer records"],
+  ["Vague → ESCALATE","","my system isn't working"],
+  ["Ambiguous → ladder","the internet is down","websites won't load across the office"],
+];
+(function(){ const box=$('democases'); if(!box) return;
+  DEMOS.forEach(([label,ti,de])=>{ const b=document.createElement('button'); b.className='ticket';
+    b.innerHTML=`${label}<div class="c">${(de||ti).slice(0,46)}</div>`;
+    b.onclick=()=>{$('title').value=ti; $('desc').value=de; runTicket();};
+    box.appendChild(b); });
+})();
+
+const EXPS=[
+  ["system_check","Full system check (15/15)","CHECK"],
+  ["real_eval","Accuracy on 2,996 real tickets","ACC"],
+  ["ablation_off","Same — synonyms OFF (ablation)","ABL"],
+  ["edge_cases","Edge cases: casual 42→100","ABL"],
+  ["exclusivity","Vocabulary exclusivity","VOCAB"],
+  ["resolver_tiers","Tiered routing (92.8/6.8/0.3)","ROUTE"],
+  ["graph_rag","Graph RAG traversals","RAG"],
+  ["self_correction","Self-correction loop","LEARN"],
+  ["explainability","Explainability chains","XAI"],
+  ["pipeline","End-to-end pipeline","E2E"],
+  ["external_real","Real public data (Zenodo)","EXT"],
+  ["pii_security","PII redaction + encryption + RBAC","SEC"],
+];
+const eb=$('experiments');
+EXPS.forEach(([id,label,tag])=>{
+  const b=document.createElement('button'); b.className='expbtn';
+  b.innerHTML=`<span>${label}</span><span class="tg">${tag}</span>`;
+  b.onclick=()=>runExp(id,label,b); eb.appendChild(b);
+});
+
+const VC={auto_resolved:["v-resolve","✓ AUTO-RESOLVED"],escalated:["v-escalate","▲ ESCALATED"],
+  safety_escalated:["v-safety","⛔ SAFETY ESCALATION"]};
+
+function layer(cls,name,badge,bcls,body){
+  return `<div class="layer ${cls}"><div class="h"><span class="name">${name}</span>
+    <span class="badge ${bcls}">${badge}</span></div><div class="body">${body}</div></div>`;
+}
+
+function runTicket(){
+  const title=$('title').value, desc=$('desc').value;
+  if(!title && !desc){return;}
+  $('out').innerHTML='<h3>Running <span class="spinner"></span></h3>';
+  fetch(API+'/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({title,description:desc})}).then(r=>r.json()).then(d=>{
+    // --- animated agent-flow strip (shows which agent is active as the ticket flows) ---
+    if(d.agent_flow && d.agent_flow.length){
+      let strip='<div class="aflow" id="aflow">';
+      d.agent_flow.forEach((a,i)=>{
+        strip+=`<div class="anode${a.terminal?' terminal':''}" data-st="${a.status}" id="an${i}">
+          <span class="num">${i+1}</span><div class="an">${a.agent}</div><div class="ar"></div></div>`;
+        if(i<d.agent_flow.length-1) strip+='<div class="aarrow">▸</div>';
+      });
+      strip+='</div>';
+      $('out').innerHTML=strip+'<div id="afdetail"></div>';
+      // play the flow: light each agent in turn, fill its result
+      let i=0;
+      const step=()=>{
+        if(i>0){const p=$('an'+(i-1));p.classList.remove('active');p.classList.add('done');}
+        if(i>=d.agent_flow.length){ renderDetail(d); return; }
+        const a=d.agent_flow[i], el=$('an'+i);
+        el.classList.add('in');
+        if(a.status!=='skipped') el.classList.add('active');
+        el.querySelector('.ar').innerHTML=a.result;
+        i++;
+        setTimeout(step, 650);
+      };
+      setTimeout(step, 150);
+    } else { renderDetail(d); }
+  }).catch(e=>{ $('out').innerHTML='<h3 style="color:var(--red)">backend error</h3><pre>'+e+'</pre>'; });
+}
+
+function renderDetail(d){
+    const detail = document.getElementById('afdetail') || $('out');
+    let h='';
+    const v=VC[d.final.outcome]||["v-escalate",d.final.outcome];
+    h+=`<div class="verdict ${v[0]}">${v[1]} → ${d.final.category}
+      <span style="font-family:var(--mono);font-size:13px;opacity:.7">(${(d.final.confidence*100).toFixed(0)}%, ${d.final.method})</span></div>`;
+
+    // 1 safety
+    h+=layer(d.safety.escalated?'bad':'active','1 · Safety Gate',
+      d.safety.escalated?'ESCALATE':'CLEAR', d.safety.escalated?'b':'ok',
+      d.safety.escalated?`Matched <b>${d.safety.matched}</b> → escalate to <b>${d.safety.department}</b>, bypass LLM (${d.safety.latency_ms} ms)`
+      :`No high-stakes pattern (${d.safety.latency_ms} ms) → proceed`);
+
+    if(!d.safety.escalated){
+      // 2 normalization
+      h+=layer('active','2 · Synonym Normalization', d.normalization.changed?'REWROTE':'NO-OP',
+        d.normalization.changed?'ok':'',
+        d.normalization.changed?`casual → canonical:<br><span class="k">before:</span> ${d.normalization.before}<br><span class="k">after:</span> ${d.normalization.after}`
+        :`text already canonical — nothing to rewrite (layer dormant here)`);
+
+      // 3 SVM with/without
+      h+=layer('active','3 · SVM Classifier', 'BOTH',  'ok',
+        `<span class="k">without normalization:</span> <b>${d.svm.raw[0]}</b> (${(d.svm.raw[1]*100).toFixed(0)}%)<br>
+         <span class="k">with normalization:</span> <b>${d.svm.normalized[0]}</b> (${(d.svm.normalized[1]*100).toFixed(0)}%)`);
+
+      // 4 scorer
+      h+=layer('active','4 · Deterministic Scorer', d.scorer.edge_case?'EDGE':'CLEAR', d.scorer.edge_case?'w':'ok',
+        `→ <b>${d.scorer.category}</b> (${(d.scorer.confidence*100).toFixed(0)}%)${d.scorer.edge_case?' — flagged edge case':''}`);
+
+      // 5 kNN
+      h+=layer('active','5 · kNN Voter', 'VOTE', 'ok',
+        `5 nearest historical tickets → <b>${d.knn.category}</b> (${(d.knn.confidence*100).toFixed(0)}% agree)`);
+
+      // 6 resolver
+      const esc=d.resolver.escalated;
+      h+=layer(esc?'warn':'active','6 · Edge-Case Resolver', d.resolver.method.toUpperCase(), esc?'w':'ok',
+        d.resolver.trace.map(s=>'· '+s).join('<br>')
+        +(d.resolver.votes?'<br><span class="k">votes:</span> '+Object.entries(d.resolver.votes).map(([k,vv])=>k+'='+vv).join(', '):''));
+
+      // 7 graph rag
+      const g=d.graph_rag;
+      h+=layer(g.root_cause?'active':'warn','7 · Graph RAG', g.root_cause?'RESOLVED':'NO MATCH', g.root_cause?'ok':'w',
+        g.root_cause?`symptoms ${JSON.stringify(g.symptoms)} → root cause <b>${g.root_cause}</b> → routes to <b>${g.category}</b><br>
+        <span class="k">resolution:</span> ${(g.resolution||'').slice(0,160)}${g.resolution&&g.resolution.length>160?'…':''}`
+        :`no vetted resolution for this symptom → escalate to human`);
+
+      // 8 reasoning chain
+      h+=layer('active','8 · Reasoning Chain (explainability)', 'GROUNDED', 'ok',
+        d.reasoning_chain.map(s=>'· '+s).join('<br>'));
+    }
+
+    detail.innerHTML=h;
+}
+
+function runExp(id,label,btn){
+  const old=btn.innerHTML; btn.innerHTML=`<span>${label}</span><span class="spinner"></span>`;
+  $('out').innerHTML=`<h3>${label} <span class="spinner"></span></h3><p class="hint">running the real script…</p>`;
+  fetch(API+'/api/experiment/'+id).then(r=>r.json()).then(d=>{
+    btn.innerHTML=old;
+    $('out').innerHTML=`<h3>${label}</h3><p class="hint">$ python ${d.cmd} &nbsp;·&nbsp; exit ${d.returncode}</p>
+      <pre>${(d.stdout||d.error||'(no output)').replace(/</g,'&lt;')}</pre>`;
+  }).catch(e=>{ btn.innerHTML=old; $('out').innerHTML='<h3 style="color:var(--red)">error</h3><pre>'+e+'</pre>'; });
+}
+</script>
+</body>
+</html>
