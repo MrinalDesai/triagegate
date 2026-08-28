@@ -43,135 +43,203 @@
   <!-- Result area (hidden until response) -->
   <div id="result-area" class="hidden">
 
-    <!-- Ladder visualization -->
-    <div class="card" id="ladder-card">
-      <div class="card-title">Resolution Ladder</div>
-      <div class="ladder" id="ladder"></div>
-    </div>
+    <!-- Two-column layout: main content left, pipeline path right -->
+    <div class="result-layout">
 
-    <!-- Per-voter breakdown -->
-    <div class="card" id="voters-card">
-      <div class="card-title">Voter Breakdown</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Voter</th>
-            <th>Domain</th>
-            <th>Confidence</th>
-          </tr>
-        </thead>
-        <tbody id="voters-tbody"></tbody>
-      </table>
-    </div>
+      <!-- Left column: voters, evidence, timing, escalation -->
+      <div class="result-main">
 
-    <!-- Evidence -->
-    <div class="card" id="evidence-card">
-      <div class="card-title">Evidence Terms</div>
-      <div class="chip-row" id="evidence-chips"></div>
-    </div>
+        <!-- Per-voter breakdown -->
+        <div class="card" id="voters-card">
+          <div class="card-title">Voter Breakdown</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Voter</th>
+                <th>Domain</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody id="voters-tbody"></tbody>
+          </table>
+        </div>
 
-    <!-- Timing -->
-    <div id="elapsed-row" class="elapsed mt-8"></div>
+        <!-- Evidence -->
+        <div class="card" id="evidence-card">
+          <div class="card-title">Evidence Terms</div>
+          <div class="chip-row" id="evidence-chips"></div>
+        </div>
 
-    <!-- Bob Escalation panel (only when domain === "escalated") -->
-    <div class="card hidden" id="escalation-card">
-      <div class="card-title">Bob Investigator Report</div>
-      <div id="escalation-inner">
-        <span class="spinner"></span> Loading investigation…
-      </div>
-    </div>
+        <!-- Timing -->
+        <div id="elapsed-row" class="elapsed mt-8"></div>
+
+        <!-- Bob Escalation panel (only when domain === "escalated") -->
+        <div class="card hidden" id="escalation-card">
+          <div class="card-title">Bob Investigator Report</div>
+          <div id="escalation-inner">
+            <span class="spinner"></span> Loading investigation…
+          </div>
+        </div>
+
+      </div><!-- /result-main -->
+
+      <!-- Right column: Pipeline path card (sticky) -->
+      <div class="result-aside">
+        <div class="pipeline-card" id="pipeline-card">
+          <div class="pipeline-title">Pipeline path</div>
+          <div class="pipeline-hint">Lights up the exact route this ticket took.</div>
+          <div class="pipeline-spine" id="pipeline-spine">
+            <!-- Populated by buildPipeline() -->
+          </div>
+        </div>
+      </div><!-- /result-aside -->
+
+    </div><!-- /result-layout -->
 
   </div><!-- /result-area -->
 </main>
 
 <script src="app.js"></script>
 <script>
-// ── Ladder rung definitions ──────────────────────────────────────────────────
-const RUNGS = [
-  { id: 'svm_gate',        label: 'SVM Gate' },
-  { id: 'voter_agreement', label: 'Voter Agreement' },
-  { id: 'escalate',        label: 'Bob Investigator' },
-  { id: 'human',           label: 'Human' },
+// ── Pipeline node definitions ─────────────────────────────────────────────────
+//
+//  Spine order: Ticket → SVM gate → Voters → Granite tiebreak →
+//               Bob Investigator → Resolved
+//
+//  Side-branch "route" pills connect horizontally from SVM gate and Voters.
+//  They light when that stage is where the ticket was resolved.
+//
+// Node IDs used internally:
+const PIPELINE_NODES = [
+  { id: 'ticket',    label: 'Ticket',            hasBranch: false },
+  { id: 'svm_gate',  label: 'SVM gate',           hasBranch: true  },
+  { id: 'voters',    label: 'Voters',             hasBranch: true  },
+  { id: 'granite',   label: 'Granite tiebreak',   hasBranch: false },
+  { id: 'bob',       label: 'Bob Investigator',   hasBranch: false },
+  { id: 'resolved',  label: 'Resolved',           hasBranch: false },
 ];
 
-// resolved_by values from the API
-const RUNG_IDS = RUNGS.map(r => r.id);
-
 /**
- * Build the ladder DOM.
- * resolvedBy   – which rung resolved the ticket (or null while loading)
- * isEscalated  – true when domain === 'escalated' (Bob glows amber instead of green)
- * escalationSettled – true once the escalation report has loaded (stops looping amber pulse)
- * verdict      – the Bob Investigator verdict string ('fix_verified','fix_failed','needs_human')
+ * Build (or rebuild) the pipeline-spine DOM.
+ *
+ * @param {string|null} resolvedBy  — "svm_gate" | "voter_agreement" | "escalate" | null
+ * @param {boolean}     isEscalated — true when domain === "escalated"
+ * @param {boolean}     escalationSettled — true once Bob report has loaded
+ * @param {string|null} verdict     — "fix_verified" | "fix_failed" | "needs_human" | null
  */
-function buildLadder(resolvedBy, isEscalated, escalationSettled, verdict) {
-  const container = document.getElementById('ladder');
-  container.innerHTML = '';
+function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict) {
+  const spine = document.getElementById('pipeline-spine');
+  spine.innerHTML = '';
 
-  const resolvedIdx = RUNG_IDS.indexOf(resolvedBy);
+  // Determine which nodes are traversed / lit / dark
+  // and which branch pills light.
+  //
+  // State buckets for spine nodes (by id):
+  //   pp-lit       : on the taken path, full green
+  //   pp-traversed : passed through en-route (dim-green)
+  //   pp-dark      : never reached (dim, no fill)
+  //   pp-resolved  : the Resolved terminal node (green)
+  //   pp-escalating: Bob Investigator while pulsing
+  //   pp-escalated : Bob Investigator after report loads
+  //   pp-resolved-failed / pp-resolved-human : Resolved node variants
+  //
+  // Branch pills (svm_gate, voters):
+  //   pp-lit   : route was resolved at this stage (route pill lights green)
+  //   (default): dim / invisible-ish
 
-  RUNGS.forEach((rung, i) => {
-    // vertical connector before this rung (except first)
-    if (i > 0) {
-      const vline = document.createElement('div');
-      vline.className = 'rung-vline' + (resolvedIdx >= 0 && i <= resolvedIdx ? ' active' : '');
-      container.appendChild(vline);
-    }
+  const nodeStates = {};   // id → class string for .pp-node
+  const vlineStates = {};  // index → class string for the vline ABOVE that node
+  const branchStates = {}; // id → class string for branch pill + branch line
 
-    const row = document.createElement('div');
-    row.className = 'rung-row';
+  // Default everything to dark
+  PIPELINE_NODES.forEach(n => { nodeStates[n.id] = 'pp-dark'; });
+  for (let i = 1; i < PIPELINE_NODES.length; i++) {
+    vlineStates[i] = '';   // empty = default --line color
+  }
 
-    // Node
-    const node = document.createElement('div');
-    node.className = 'rung-node';
-    node.textContent = rung.label;
+  if (resolvedBy !== null) {
+    // Ticket is always lit (starting node)
+    nodeStates['ticket'] = 'pp-lit';
+    vlineStates[1] = 'pp-lit'; // Ticket → SVM gate line
 
-    if (resolvedBy === null) {
-      // still loading — neutral default state
-    } else if (i < resolvedIdx) {
-      // passed through
-      node.classList.add('passed');
-    } else if (i === resolvedIdx) {
-      if (rung.id === 'escalate' && isEscalated) {
-        // Bob Investigator rung: pulsing amber while loading, settled once report arrives
-        node.classList.add(escalationSettled ? 'escalated' : 'escalating');
-      } else if (rung.id === 'human' && verdict === 'needs_human') {
-        node.classList.add('human-active');
+    if (resolvedBy === 'svm_gate') {
+      // SVM gate resolved it
+      nodeStates['svm_gate'] = 'pp-resolved';
+      branchStates['svm_gate'] = 'pp-lit';
+      // Voters, Granite, Bob stay dark; Resolved lights
+      nodeStates['resolved'] = 'pp-resolved';
+      // vline from svm→voters: not traversed
+    } else if (resolvedBy === 'voter_agreement') {
+      // Traversed SVM gate (passed but did not resolve)
+      nodeStates['svm_gate'] = 'pp-traversed';
+      vlineStates[2] = 'pp-traversed'; // SVM gate → Voters line
+      nodeStates['voters'] = 'pp-resolved';
+      branchStates['voters'] = 'pp-lit';
+      nodeStates['resolved'] = 'pp-resolved';
+    } else if (resolvedBy === 'escalate') {
+      // Traversed SVM gate and Voters; Granite tiebreak lit; Bob lights
+      nodeStates['svm_gate'] = 'pp-traversed';
+      vlineStates[2] = 'pp-traversed';
+      nodeStates['voters'] = 'pp-traversed';
+      vlineStates[3] = 'pp-traversed';
+      nodeStates['granite'] = 'pp-lit';
+      vlineStates[4] = 'pp-lit';
+      if (escalationSettled) {
+        nodeStates['bob'] = 'pp-escalated';
       } else {
-        node.classList.add('resolved');
+        nodeStates['bob'] = 'pp-escalating';
       }
-    } else {
-      // never reached — outline only
-      node.classList.add('unreached');
-    }
-
-    // Horizontal connector
-    const conn = document.createElement('div');
-    conn.className = 'rung-connector' +
-      (resolvedIdx >= 0 && i < resolvedIdx ? ' passed' :
-       resolvedIdx >= 0 && i === resolvedIdx ? ' active' : '');
-
-    // Status label
-    const status = document.createElement('div');
-    status.className = 'rung-status';
-    if (resolvedBy !== null) {
-      if (i < resolvedIdx) {
-        status.textContent = 'passed';
-      } else if (i === resolvedIdx) {
-        if (rung.id === 'escalate' && isEscalated) {
-          status.textContent = escalationSettled ? 'settled' : 'escalating…';
+      // Resolved: only lights if report is settled
+      if (escalationSettled && verdict) {
+        vlineStates[5] = verdict === 'fix_failed' ? 'pp-amber' : 'pp-lit';
+        if (verdict === 'fix_verified') {
+          nodeStates['resolved'] = 'pp-resolved';
+        } else if (verdict === 'fix_failed') {
+          nodeStates['resolved'] = 'pp-resolved-failed';
         } else {
-          status.textContent = 'resolved ✓';
+          // needs_human
+          nodeStates['resolved'] = 'pp-resolved-human';
         }
       } else {
-        status.textContent = '—';
+        // Resolved stays dark until verdict arrives
+        nodeStates['resolved'] = 'pp-dark';
       }
     }
+  }
 
-    row.appendChild(node);
-    row.appendChild(conn);
-    row.appendChild(status);
-    container.appendChild(row);
+  // Build the DOM
+  PIPELINE_NODES.forEach((node, i) => {
+    // Vertical connector before this node (except first)
+    if (i > 0) {
+      const vline = document.createElement('div');
+      vline.className = 'pp-vline' + (vlineStates[i] ? ' ' + vlineStates[i] : '');
+      spine.appendChild(vline);
+    }
+
+    // Step row: [pill] [branch-line + route-pill] if hasBranch
+    const step = document.createElement('div');
+    step.className = 'pipeline-step';
+
+    const pill = document.createElement('div');
+    pill.id = 'ppn-' + node.id;
+    pill.className = 'pp-node ' + (nodeStates[node.id] || 'pp-dark');
+    pill.textContent = node.label;
+    step.appendChild(pill);
+
+    if (node.hasBranch) {
+      const bline = document.createElement('div');
+      const bstate = branchStates[node.id] || '';
+      bline.className = 'pp-branch-line' + (bstate ? ' ' + bstate : '');
+      step.appendChild(bline);
+
+      const route = document.createElement('div');
+      route.id = 'ppr-' + node.id;
+      route.className = 'pp-route' + (bstate ? ' ' + bstate : '');
+      route.textContent = 'route';
+      step.appendChild(route);
+    }
+
+    spine.appendChild(step);
   });
 }
 
@@ -226,8 +294,8 @@ async function loadEscalation(ticketId, resolvedBy) {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const r = await resp.json();
 
-    // Settle the ladder amber pulse now that the report has loaded
-    buildLadder(resolvedBy, true, true, r.verdict);
+    // Settle the pipeline amber pulse now that the report has loaded
+    buildPipeline(resolvedBy, true, true, r.verdict);
 
     const verdictClass = { fix_verified: 'fix-verified', fix_failed: 'fix-failed', needs_human: 'needs-human' }[r.verdict] || 'needs-human';
     const verdictLabel = { fix_verified: '✓ FIX VERIFIED', fix_failed: '✗ FIX FAILED', needs_human: '⚠ NEEDS HUMAN' }[r.verdict] || r.verdict;
@@ -296,8 +364,8 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
 
     const isEscalated = data.domain === 'escalated';
 
-    // Build ladder — escalating pulse until report loads
-    buildLadder(data.resolved_by, isEscalated, false, null);
+    // Build pipeline — escalating pulse until report loads
+    buildPipeline(data.resolved_by, isEscalated, false, null);
 
     // Voters
     buildVoters(data.voters);
@@ -315,8 +383,9 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
 
   } catch (err) {
     document.getElementById('result-area').classList.remove('hidden');
-    document.getElementById('ladder-card').innerHTML =
-      `<div class="card-title">Error</div><p style="color:var(--red)">${esc(String(err))}</p>`;
+    // Show error in the pipeline card area
+    document.getElementById('pipeline-card').innerHTML =
+      `<div class="pipeline-title" style="color:var(--red)">Error</div><p style="color:var(--red);margin-top:8px;font-size:12px">${esc(String(err))}</p>`;
   } finally {
     btn.disabled = false;
     btn.textContent = '▶ Route Ticket';

@@ -221,128 +221,217 @@ button[type="submit"] {
 button[type="submit"]:hover { color: #040; }
 button[type="submit"]:disabled { opacity: .4; cursor: not-allowed; }
 
-/* ── Ladder ────────────────────────────────────────────────────────────────── */
-.ladder { display: flex; flex-direction: column; gap: 0; }
-
-.rung-row {
+/* ── Result layout: two columns (main-left + pipeline sticky-right) ─────── */
+.result-layout {
   display: flex;
-  align-items: center;
-  gap: 0;
+  gap: 24px;
+  align-items: flex-start;
+}
+.result-main  { flex: 1; min-width: 0; }
+.result-aside {
+  width: 260px;
+  flex: none;
+  position: sticky;
+  top: 18px;
+}
+@media (max-width: 860px) {
+  .result-layout  { flex-direction: column; }
+  .result-aside   { width: 100%; position: static; }
 }
 
-.rung-node {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 210px;
-  min-width: 210px;
-  height: 54px;
-  border: 2px solid var(--line);
-  border-radius: 10px;
+/* ── Pipeline path card ────────────────────────────────────────────────────── */
+.pipeline-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px 16px 20px;
+}
+.pipeline-title {
   font-family: var(--display);
   font-size: 14px;
   font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -.01em;
+  margin-bottom: 3px;
+}
+.pipeline-hint {
+  font-size: 10.5px;
   color: var(--dim);
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
+/* The main spine container — flexbox column with relative positioning */
+.pipeline-spine {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  position: relative;
+}
+
+/* Each step row holds [spine-item] [branch-item?] */
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+}
+
+/* Pill node — exact legacy sizing from explain.html .pn rect (rx=6, mono, 11px) */
+.pp-node {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  min-width: 110px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
   background: var(--panel2);
-  transition: border-color .35s, color .35s, background .35s, box-shadow .35s, opacity .35s;
-  text-align: center;
-  padding: 0 12px;
-}
-
-.rung-connector {
-  flex: 1;
-  height: 2px;
-  background: var(--line);
-  transition: background .35s, opacity .35s;
-}
-
-.rung-status {
-  font-size: 10px;
   font-family: var(--mono);
-  letter-spacing: .1em;
+  font-size: 11px;
   color: var(--dim);
-  min-width: 90px;
-  padding-left: 14px;
+  transition: border-color .35s, color .35s, background .35s, box-shadow .35s;
+  white-space: nowrap;
+  position: relative;
+  z-index: 1;
 }
 
-/* vertical connector between rung rows */
-.rung-vline {
+/* Vertical connector between spine nodes */
+.pp-vline {
   width: 2px;
-  height: 20px;
+  height: 16px;
   background: var(--line);
-  margin-left: 103px;
+  margin-left: 54px;          /* centres under a 110px pill */
+  transition: background .35s;
+  flex-shrink: 0;
+}
+
+/* Horizontal branch connector (from spine to side "route" pill) */
+.pp-branch-line {
+  height: 2px;
+  width: 16px;
+  background: var(--line);
+  margin-left: 2px;
+  flex-shrink: 0;
   transition: background .35s;
 }
-.rung-vline.active { background: var(--signal); }
 
-/* ── Rung states ───────────────────────────────────────────────────────────── */
+/* Side "route" pill — same pill geometry but optional */
+.pp-route {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  min-width: 52px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  transition: border-color .35s, color .35s, background .35s, box-shadow .35s;
+  white-space: nowrap;
+  opacity: .55;
+}
 
-/* Never reached — outline only, dimmed text */
-.rung-node.unreached {
+/* ── Pipeline node states ──────────────────────────────────────────────────── */
+
+/* NOT REACHED — dim text, --line border, no fill — explicitly visible */
+.pp-node.pp-dark,
+.pp-route.pp-dark {
   border-color: var(--line);
   color: var(--dim);
   background: transparent;
-  opacity: 1;
 }
 
-/* Passed through — solid fill but dimmed 50% */
-.rung-node.passed {
-  border-color: var(--line);
-  color: var(--mute);
-  background: var(--panel);
-  opacity: .5;
+/* TRAVERSED (passed through on path to resolution) — dim-green, not glowing */
+.pp-node.pp-traversed {
+  border-color: rgba(61,220,132,.35);
+  color: rgba(61,220,132,.55);
+  background: rgba(61,220,132,.05);
 }
-.rung-connector.passed  { background: var(--line);   opacity: .4; }
-.rung-connector.active  { background: var(--signal); opacity: 1;  }
+.pp-vline.pp-traversed  { background: rgba(61,220,132,.35); }
+.pp-branch-line.pp-traversed { background: rgba(61,220,132,.35); }
 
-/* Resolved here — --signal green with pulse settling to solid */
-.rung-node.resolved {
+/* LIT — on the taken path, full --signal green */
+.pp-node.pp-lit {
   border-color: var(--signal);
   color: var(--signal);
   background: rgba(61,220,132,.10);
-  animation: pulse-resolve 2s ease-out forwards;
+  box-shadow: 0 0 10px 2px rgba(61,220,132,.15), 0 0 0 1px var(--signal);
 }
-@keyframes pulse-resolve {
-  0%   { box-shadow: 0 0 28px 10px rgba(61,220,132,.6), 0 0 0 1px var(--signal); }
-  60%  { box-shadow: 0 0 18px 6px  rgba(61,220,132,.35), 0 0 0 1px var(--signal); }
-  100% { box-shadow: 0 0 10px 2px  rgba(61,220,132,.15), 0 0 0 1px var(--signal); }
+.pp-vline.pp-lit { background: var(--signal); }
+.pp-branch-line.pp-lit { background: var(--signal); }
+
+/* ROUTE pill lit */
+.pp-route.pp-lit {
+  border-color: var(--signal);
+  color: var(--signal);
+  background: rgba(61,220,132,.10);
+  box-shadow: 0 0 8px 1px rgba(61,220,132,.20);
+  opacity: 1;
 }
 
-/* Bob Investigator escalating — amber, keeps pulsing until report loads */
-.rung-node.escalating {
+/* RESOLVED — brief pulse then settles solid signal-green */
+.pp-node.pp-resolved {
+  border-color: var(--signal);
+  color: var(--signal);
+  background: rgba(61,220,132,.12);
+  animation: pp-pulse-resolve 2s ease-out forwards;
+}
+@keyframes pp-pulse-resolve {
+  0%   { box-shadow: 0 0 28px 10px rgba(61,220,132,.6), 0 0 0 1px var(--signal); }
+  60%  { box-shadow: 0 0 18px 6px  rgba(61,220,132,.35), 0 0 0 1px var(--signal); }
+  100% { box-shadow: 0 0 10px 2px  rgba(61,220,132,.12), 0 0 0 1px var(--signal); }
+}
+
+/* ESCALATING — amber pulsing loop */
+.pp-node.pp-escalating {
   border-color: var(--amber);
   color: var(--amber);
   background: rgba(255,180,84,.08);
-  animation: pulse-amber-loop 1.2s ease-in-out infinite;
+  animation: pp-pulse-amber-loop 1.2s ease-in-out infinite;
 }
-@keyframes pulse-amber-loop {
+@keyframes pp-pulse-amber-loop {
   0%, 100% { box-shadow: 0 0 18px 6px  rgba(255,180,84,.45), 0 0 0 1px var(--amber); }
   50%       { box-shadow: 0 0 32px 12px rgba(255,180,84,.65), 0 0 0 1px var(--amber); }
 }
 
-/* Bob Investigator — settled after report loaded */
-.rung-node.escalated {
+/* ESCALATED — settled amber */
+.pp-node.pp-escalated {
   border-color: var(--amber);
   color: var(--amber);
   background: rgba(255,180,84,.08);
-  animation: pulse-escalated 2s ease-out forwards;
+  animation: pp-pulse-escalated 2s ease-out forwards;
 }
-@keyframes pulse-escalated {
-  0%   { box-shadow: 0 0 28px 10px rgba(255,180,84,.6), 0 0 0 1px var(--amber); }
-  100% { box-shadow: 0 0 10px 2px  rgba(255,180,84,.15), 0 0 0 1px var(--amber); }
+@keyframes pp-pulse-escalated {
+  0%   { box-shadow: 0 0 28px 10px rgba(255,180,84,.6),  0 0 0 1px var(--amber); }
+  100% { box-shadow: 0 0 10px 2px  rgba(255,180,84,.12), 0 0 0 1px var(--amber); }
 }
 
-/* Human rung — only lights when verdict is needs_human */
-.rung-node.human-active {
+/* Resolved node: fix_failed → red, needs_human → amber */
+.pp-node.pp-resolved-failed {
   border-color: var(--red);
   color: var(--red);
   background: rgba(255,93,93,.08);
-  animation: pulse-resolve 2s ease-out forwards;
+  animation: pp-pulse-resolve-red 2s ease-out forwards;
 }
-@keyframes pulse-human {
+@keyframes pp-pulse-resolve-red {
   0%   { box-shadow: 0 0 28px 10px rgba(255,93,93,.6), 0 0 0 1px var(--red); }
-  100% { box-shadow: 0 0 10px 2px  rgba(255,93,93,.15), 0 0 0 1px var(--red); }
+  100% { box-shadow: 0 0 10px 2px  rgba(255,93,93,.12), 0 0 0 1px var(--red); }
 }
+.pp-node.pp-resolved-human {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: rgba(255,180,84,.08);
+  animation: pp-pulse-escalated 2s ease-out forwards;
+}
+
+/* Amber vline for escalation path */
+.pp-vline.pp-amber  { background: var(--amber); }
 
 /* ── Voters table ──────────────────────────────────────────────────────────── */
 table {
