@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel
 
 
@@ -16,3 +16,9 @@ class RoutingDecision(BaseModel):
     method: str
     confidence: float
     explanation: Optional[str] = None
+
+
+class ScorerResult(BaseModel):
+    predicted_domain: str
+    confidence: float
+    evidence: List[str]
