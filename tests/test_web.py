@@ -63,3 +63,16 @@ class TestStaticFiles:
     def test_about_html_content_type(self):
         response = client.get("/about.html")
         assert "text/html" in response.headers["content-type"]
+
+
+class TestIndexHtmlRedirect:
+    def test_index_html_redirects(self):
+        """/index.html must issue a 307 or 308 redirect."""
+        response = client.get("/index.html", follow_redirects=False)
+        assert response.status_code in (307, 308)
+
+    def test_index_html_redirect_lands_on_200_html(self):
+        """/index.html followed to completion must return 200 text/html."""
+        response = client.get("/index.html", follow_redirects=True)
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]

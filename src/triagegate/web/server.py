@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from triagegate.escalation.bob_tier import EscalationReport, EscalationStore
@@ -39,6 +39,12 @@ def _get_resolver() -> Resolver:
     if _resolver is None:
         _resolver = Resolver()
     return _resolver
+
+
+@app.get("/index.html")
+def index_html_redirect() -> RedirectResponse:
+    """Redirect /index.html → / (permanent)."""
+    return RedirectResponse(url="/", status_code=308)
 
 
 @app.get("/")
