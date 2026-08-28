@@ -1,3 +1,3 @@
-from .ticket import Ticket, RoutingDecision, ScorerResult
+from .ticket import Ticket, RoutingDecision, ScorerResult, VoterResult, LadderResult
 
-__all__ = ["Ticket", "RoutingDecision", "ScorerResult"]
+__all__ = ["Ticket", "RoutingDecision", "ScorerResult", "VoterResult", "LadderResult"]

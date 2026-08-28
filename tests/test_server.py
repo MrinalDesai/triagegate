@@ -22,12 +22,6 @@ class TestRouteEndpoint:
         response = client.post("/api/route", json=payload)
         assert response.status_code == 200
 
-    def test_route_method_is_stub(self):
-        payload = {"id": "T-101", "title": "Auth error", "description": "OAuth token rejected."}
-        response = client.post("/api/route", json=payload)
-        data = response.json()
-        assert data["method"] == "stub"
-
     def test_route_ticket_id_matches(self):
         payload = {"id": "T-102", "title": "Disk full", "description": "Root partition at 100%."}
         response = client.post("/api/route", json=payload)
@@ -40,8 +34,10 @@ class TestRouteEndpoint:
         data = response.json()
         assert "ticket_id" in data
         assert "domain" in data
-        assert "method" in data
-        assert "confidence" in data
+        assert "resolved_by" in data
+        assert "voters" in data
+        assert "evidence" in data
+        assert "elapsed_ms" in data
 
     def test_route_missing_field_returns_422(self):
         # description is required — omitting it should yield 422 Unprocessable Entity

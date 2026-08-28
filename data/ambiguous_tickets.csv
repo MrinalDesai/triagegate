@@ -1,0 +1,7 @@
+﻿id,title,description,domain
+A-0001,checkout hangs after clicking pay,Payment page freezes on submit. Logs show connection pool timeout but browser console also full of JS errors. Started after last deploy.,api
+A-0002,users getting logged out randomly,Token looks valid and has not expired but the session table shows stale rows for affected users. Only happens on mobile.,auth
+A-0003,everything slow since yesterday,Not sure what happened but the whole app crawls. Nothing in the error logs. Restarting the container helps for an hour then it comes back.,database
+A-0004,new build works on my machine but page is blank in prod,CI is green and the bundle deploys fine but users see a white screen. No console errors locally. Prod shows one failed chunk request.,build
+A-0005,cant upload profile photo anymore,Upload button spins forever. Network tab shows the request never completes. Backend says it never received anything. Worked last week.,frontend
+A-0006,orders duplicated for some customers,Some customers charged twice. Payment provider shows one charge but our orders table has two rows with different ids and same cart.,database
