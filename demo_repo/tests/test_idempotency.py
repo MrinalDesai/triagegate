@@ -1,14 +1,11 @@
 """
-test_idempotency.py — regression test for the idempotency_key bug in payments.py
+test_idempotency.py — regression test for idempotency_key behaviour in payments.py
 
-STATUS: EXPECTED TO FAIL until the bug described in KNOWN_BUG.md is fixed.
+STATUS: EXPECTED TO FAIL.
 
-The bug:  charge() accepts an idempotency_key but never checks whether an
-          order with that key already exists.  Retrying the same charge
-          therefore inserts a duplicate order row.
-
-The fix:  Before inserting, look up any existing order with the same
-          idempotency_key and return it immediately if found.
+Observed symptom: retrying a charge with the same idempotency_key does not
+return the original order — it yields a new, different order id, resulting in
+duplicate orders in the database for what should have been a single transaction.
 """
 
 import pytest
@@ -22,8 +19,8 @@ def test_retry_charge_with_same_idempotency_key_creates_only_one_order():
     exactly ONE order in the database.  The second call should return the
     original order rather than creating a duplicate.
 
-    This test currently FAILS because payments.charge() does not check for an
-    existing order before inserting (see KNOWN_BUG.md).
+    Currently FAILS: a retry yields a new order id instead of the original,
+    producing two distinct orders for a single logical transaction.
     """
     key = "idem-test-key-001"
 

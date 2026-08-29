@@ -13,7 +13,7 @@
 
 <div id="header">
   <span class="logo">Triage<em>Gate</em></span>
-  <span class="badge">IBM Bob 2.0 + watsonx</span>
+  <span class="badge" id="header-badge">POWERED BY IBM BOB 2.0</span>
 </div>
 
 <nav>
@@ -36,6 +36,17 @@
 
 <script src="app.js"></script>
 <script>
+(async function initConfig() {
+  try {
+    const r = await fetch('/api/config');
+    if (r.ok) {
+      const cfg = await r.json();
+      document.getElementById('header-badge').textContent =
+        cfg.granite_enabled ? 'IBM BOB 2.0 + WATSONX' : 'POWERED BY IBM BOB 2.0';
+    }
+  } catch (_) { /* leave default */ }
+})();
+
 const RUNG_LABELS = {
   svm_gate:        'SVM Gate',
   voter_agreement: 'Voter Agreement',

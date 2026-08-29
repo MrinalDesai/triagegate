@@ -97,6 +97,17 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/api/config")
+def config() -> dict:
+    """Return runtime configuration flags for the frontend."""
+    granite_enabled = bool(
+        os.environ.get("WATSONX_API_KEY")
+        and os.environ.get("WATSONX_PROJECT_ID")
+        and os.environ.get("WATSONX_URL")
+    )
+    return {"granite_enabled": granite_enabled}
+
+
 @app.post("/api/route", response_model=LadderResult)
 def route_ticket(ticket: Ticket) -> LadderResult:
     result = _get_resolver().resolve(ticket)

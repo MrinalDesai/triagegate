@@ -13,7 +13,7 @@
 
 <div id="header">
   <span class="logo">Triage<em>Gate</em></span>
-  <span class="badge">IBM Bob 2.0 + watsonx</span>
+  <span class="badge" id="header-badge">POWERED BY IBM BOB 2.0</span>
 </div>
 
 <nav>
@@ -33,18 +33,35 @@
       stopping at the earliest rung that can confidently resolve it. The system combines a
       deterministic keyword scorer, an SVM classifier, and a k-nearest-neighbour classifier whose
       votes are reconciled before any escalation decision is made. TriageGate is built on
-      <strong>IBM Bob 2.0</strong> and backed by
-      <strong>watsonx</strong> foundation models for deep reasoning.
+      <strong>IBM Bob 2.0</strong>; when WatsonX credentials are present, Granite foundation
+      models are additionally available as a tiebreak layer.
     </p>
 
-    <h2>Automated Debugging</h2>
+    <h2>Escalation and Human-Approved Investigation</h2>
     <p>
-      When a ticket cannot be resolved by the statistical rungs, the Bob Investigator mode takes
-      over. It performs root-cause analysis, traces the fault to specific files, generates and
-      applies a candidate patch, then runs the full test suite to verify the fix. The resulting
-      report — root cause, patch summary, unified diff, and before/after test counts — is stored
-      and surfaced directly in the Console tab alongside a verdict badge
-      (Fix Verified, Fix Failed, or Needs Human).
+      When a ticket cannot be resolved by the statistical rungs, it is escalated to the Bob
+      Investigator mode. The investigator performs root-cause analysis, traces the fault to
+      specific files, and formulates a candidate patch. Before any code is modified, the
+      investigator classifies the fix risk:
+    </p>
+    <ul>
+      <li>
+        <strong>High-risk changes</strong> (payment processing, authentication, destructive
+        database operations) are <em>never applied automatically</em>. The investigator presents
+        the proposed patch as a unified diff, states the risk justification, and explicitly asks
+        a human operator for approval. The patch is applied only after the operator confirms
+        in-session.
+      </li>
+      <li>
+        <strong>Low-risk changes</strong> (pure logic fixes, read-only paths) may be applied
+        immediately, with the report flagged as auto-applied.
+      </li>
+    </ul>
+    <p>
+      After a patch is applied, the full test suite runs automatically. The resulting report —
+      root cause, patch summary, unified diff, and before/after test counts — is stored and
+      surfaced in the Console tab alongside a verdict badge (Fix Verified, Fix Failed, or Needs
+      Human) and a risk badge (High Risk / Low Risk).
     </p>
 
     <h2>Automated Testing</h2>
@@ -70,5 +87,17 @@
 </main>
 
 <script src="app.js"></script>
+<script>
+(async function initConfig() {
+  try {
+    const r = await fetch('/api/config');
+    if (r.ok) {
+      const cfg = await r.json();
+      document.getElementById('header-badge').textContent =
+        cfg.granite_enabled ? 'IBM BOB 2.0 + WATSONX' : 'POWERED BY IBM BOB 2.0';
+    }
+  } catch (_) { /* leave default */ }
+})();
+</script>
 </body>
 </html>

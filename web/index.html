@@ -13,7 +13,7 @@
 
 <div id="header">
   <span class="logo">Triage<em>Gate</em></span>
-  <span class="badge">IBM Bob 2.0 + watsonx</span>
+  <span class="badge" id="header-badge">POWERED BY IBM BOB 2.0</span>
 </div>
 
 <nav>
@@ -101,6 +101,22 @@
 
 <script src="app.js"></script>
 <script>
+// ── Runtime config ────────────────────────────────────────────────────────────
+// Fetched once at page load; controls badge text and Granite node rendering.
+let _graniteEnabled = false;
+
+(async function initConfig() {
+  try {
+    const r = await fetch('/api/config');
+    if (r.ok) {
+      const cfg = await r.json();
+      _graniteEnabled = !!cfg.granite_enabled;
+    }
+  } catch (_) { /* leave default false */ }
+  document.getElementById('header-badge').textContent =
+    _graniteEnabled ? 'IBM BOB 2.0 + WATSONX' : 'POWERED BY IBM BOB 2.0';
+})();
+
 // ── Pipeline node definitions ─────────────────────────────────────────────────
 //
 //  Spine order: Ticket → SVM gate → Voters → Granite tiebreak →
@@ -169,6 +185,8 @@ function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict) {
       // Voters, Granite, Bob stay dark; Resolved lights
       nodeStates['resolved'] = 'pp-resolved';
       // vline from svm→voters: not traversed
+      // Granite tiebreak: never reached — render as dark (or pp-dark if granite disabled)
+      nodeStates['granite'] = 'pp-dark';
     } else if (resolvedBy === 'voter_agreement') {
       // Traversed SVM gate (passed but did not resolve)
       nodeStates['svm_gate'] = 'pp-traversed';
@@ -176,14 +194,17 @@ function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict) {
       nodeStates['voters'] = 'pp-resolved';
       branchStates['voters'] = 'pp-lit';
       nodeStates['resolved'] = 'pp-resolved';
+      // Granite tiebreak: never reached
+      nodeStates['granite'] = 'pp-dark';
     } else if (resolvedBy === 'escalate') {
       // Traversed SVM gate and Voters; Granite tiebreak lit; Bob lights
       nodeStates['svm_gate'] = 'pp-traversed';
       vlineStates[2] = 'pp-traversed';
       nodeStates['voters'] = 'pp-traversed';
       vlineStates[3] = 'pp-traversed';
-      nodeStates['granite'] = 'pp-lit';
-      vlineStates[4] = 'pp-lit';
+      // Granite: only lit when actually enabled; dark (never-reached) otherwise
+      nodeStates['granite'] = _graniteEnabled ? 'pp-lit' : 'pp-dark';
+      vlineStates[4] = _graniteEnabled ? 'pp-lit' : '';
       if (escalationSettled) {
         nodeStates['bob'] = 'pp-escalated';
       } else {
@@ -280,67 +301,104 @@ function buildEvidence(evidence) {
 }
 
 // ── Escalation panel ─────────────────────────────────────────────────────────
+// When a ticket is escalated, poll GET /api/escalations/{ticket_id} every
+// 5 seconds (up to 10 minutes) while the Bob Investigator node pulses.
+// Stop polling as soon as a report is returned; render and settle the node.
+
+const POLL_INTERVAL_MS  = 5_000;   // 5 seconds
+const POLL_MAX_MS       = 600_000; // 10 minutes
+let   _pollTimer        = null;
+
+function _clearPoll() {
+  if (_pollTimer !== null) {
+    clearTimeout(_pollTimer);
+    _pollTimer = null;
+  }
+}
+
+async function _renderReport(r, resolvedBy) {
+  const inner = document.getElementById('escalation-inner');
+
+  // Settle the pipeline node now that the report has loaded
+  buildPipeline(resolvedBy, true, true, r.verdict);
+
+  const verdictClass = { fix_verified: 'fix-verified', fix_failed: 'fix-failed', needs_human: 'needs-human' }[r.verdict] || 'needs-human';
+  const verdictLabel = { fix_verified: '✓ FIX VERIFIED', fix_failed: '✗ FIX FAILED', needs_human: '⚠ NEEDS HUMAN' }[r.verdict] || r.verdict;
+
+  const riskLevel = (r.risk_level || 'low').toLowerCase();
+  const isHighRisk = riskLevel === 'high';
+  const riskBadgeClass = isHighRisk ? 'risk-badge risk-high' : 'risk-badge risk-low';
+  const riskBadgeLabel = isHighRisk ? 'HIGH RISK' : 'LOW RISK';
+  const riskSubLabel = isHighRisk
+    ? 'human approval required'
+    : (r.auto_applied ? 'auto-applied' : 'eligible for auto-apply');
+
+  inner.innerHTML = `
+    <div class="mt-8 verdict-risk-row" style="margin-bottom:16px">
+      <span class="verdict-badge ${verdictClass}">${verdictLabel}</span>
+      <span class="${riskBadgeClass}">
+        ${riskBadgeLabel}
+        <span class="risk-sub">${riskSubLabel}</span>
+      </span>
+    </div>
+
+    <div class="card-title mt-16">Root Cause</div>
+    <p style="margin-bottom:16px;color:var(--mute)">${esc(r.root_cause)}</p>
+
+    <div class="card-title">Patch Summary</div>
+    <p style="margin-bottom:16px;color:var(--mute)">${esc(r.patch_summary)}</p>
+
+    <div class="card-title">Files Examined</div>
+    <div class="chip-row" style="margin-bottom:16px">
+      ${r.files_examined.map(f => `<span class="chip">${esc(f)}</span>`).join('')}
+    </div>
+
+    <div class="card-title">Diff</div>
+    <pre id="diff-block" style="margin-bottom:16px"></pre>
+
+    <div class="card-title">Test Results</div>
+    <div class="tests-grid">
+      <div class="tests-block"><label>Before</label><code>${esc(r.tests_before)}</code></div>
+      <div class="tests-block"><label>After</label><code>${esc(r.tests_after)}</code></div>
+    </div>
+  `;
+  renderDiff(document.getElementById('diff-block'), r.diff);
+}
+
 async function loadEscalation(ticketId, resolvedBy) {
-  const card = document.getElementById('escalation-card');
+  const card  = document.getElementById('escalation-card');
   const inner = document.getElementById('escalation-inner');
   card.classList.remove('hidden');
+  _clearPoll();
 
-  try {
-    const resp = await fetch(`/api/escalations/${encodeURIComponent(ticketId)}`);
-    if (resp.status === 404) {
-      inner.innerHTML = '<span class="mute">Investigation pending — no report filed yet.</span>';
-      return;
+  const deadline = Date.now() + POLL_MAX_MS;
+
+  async function attempt() {
+    try {
+      const resp = await fetch(`/api/escalations/${encodeURIComponent(ticketId)}`);
+      if (resp.ok) {
+        // Report is ready — stop polling and render
+        _clearPoll();
+        const r = await resp.json();
+        await _renderReport(r, resolvedBy);
+        return;
+      }
+      if (resp.status !== 404) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      // 404: report not yet filed — schedule next poll if within deadline
+      if (Date.now() < deadline) {
+        _pollTimer = setTimeout(attempt, POLL_INTERVAL_MS);
+      } else {
+        inner.innerHTML = '<span class="mute">Investigation timed out — no report filed within 10 minutes.</span>';
+      }
+    } catch (e) {
+      _clearPoll();
+      inner.innerHTML = `<span style="color:var(--red)">Error loading report: ${esc(String(e))}</span>`;
     }
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const r = await resp.json();
-
-    // Settle the pipeline amber pulse now that the report has loaded
-    buildPipeline(resolvedBy, true, true, r.verdict);
-
-    const verdictClass = { fix_verified: 'fix-verified', fix_failed: 'fix-failed', needs_human: 'needs-human' }[r.verdict] || 'needs-human';
-    const verdictLabel = { fix_verified: '✓ FIX VERIFIED', fix_failed: '✗ FIX FAILED', needs_human: '⚠ NEEDS HUMAN' }[r.verdict] || r.verdict;
-
-    const riskLevel = (r.risk_level || 'low').toLowerCase();
-    const isHighRisk = riskLevel === 'high';
-    const riskBadgeClass = isHighRisk ? 'risk-badge risk-high' : 'risk-badge risk-low';
-    const riskBadgeLabel = isHighRisk ? 'HIGH RISK' : 'LOW RISK';
-    const riskSubLabel = isHighRisk
-      ? 'human approval required'
-      : (r.auto_applied ? 'auto-applied' : 'eligible for auto-apply');
-
-    inner.innerHTML = `
-      <div class="mt-8 verdict-risk-row" style="margin-bottom:16px">
-        <span class="verdict-badge ${verdictClass}">${verdictLabel}</span>
-        <span class="${riskBadgeClass}">
-          ${riskBadgeLabel}
-          <span class="risk-sub">${riskSubLabel}</span>
-        </span>
-      </div>
-
-      <div class="card-title mt-16">Root Cause</div>
-      <p style="margin-bottom:16px;color:var(--mute)">${esc(r.root_cause)}</p>
-
-      <div class="card-title">Patch Summary</div>
-      <p style="margin-bottom:16px;color:var(--mute)">${esc(r.patch_summary)}</p>
-
-      <div class="card-title">Files Examined</div>
-      <div class="chip-row" style="margin-bottom:16px">
-        ${r.files_examined.map(f => `<span class="chip">${esc(f)}</span>`).join('')}
-      </div>
-
-      <div class="card-title">Diff</div>
-      <pre id="diff-block" style="margin-bottom:16px"></pre>
-
-      <div class="card-title">Test Results</div>
-      <div class="tests-grid">
-        <div class="tests-block"><label>Before</label><code>${esc(r.tests_before)}</code></div>
-        <div class="tests-block"><label>After</label><code>${esc(r.tests_after)}</code></div>
-      </div>
-    `;
-    renderDiff(document.getElementById('diff-block'), r.diff);
-  } catch (e) {
-    inner.innerHTML = `<span style="color:var(--red)">Error loading report: ${esc(String(e))}</span>`;
   }
+
+  await attempt();
 }
 
 // ── Form submit ───────────────────────────────────────────────────────────────
@@ -354,6 +412,9 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Routing…';
+
+  // Cancel any in-flight poll from a previous submission
+  _clearPoll();
 
   // Reset result area
   document.getElementById('result-area').classList.add('hidden');
@@ -388,7 +449,7 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
     // Elapsed
     document.getElementById('elapsed-row').textContent = `Elapsed: ${data.elapsed_ms} ms`;
 
-    // Escalation panel: show with looping amber, then settle once report lands
+    // Escalation panel: show with looping amber, then poll until report lands
     if (isEscalated) {
       loadEscalation(data.ticket_id, data.resolved_by);
     }
