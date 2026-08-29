@@ -10,7 +10,7 @@ from triagegate.pipeline.resolver import Resolver
 
 
 # ---------------------------------------------------------------------------
-# Module-level shared resolver — default thresholds (svm_threshold=0.75)
+# Module-level shared resolver — default thresholds (svm_threshold=0.55)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
@@ -119,7 +119,7 @@ class TestRung1SvmGate:
 
 class TestRung2And3:
     def test_mixed_ticket_does_not_resolve_at_rung1(self, resolver: Resolver) -> None:
-        """A mixed api+database ticket should not be caught by svm_gate (default thresh 0.75)."""
+        """A mixed api+database ticket should not be caught by svm_gate (default thresh 0.55)."""
         ticket = Ticket(id="T-mixed", title=_MIXED[0], description=_MIXED[1])
         result = resolver.resolve(ticket)
         assert result.resolved_by != "svm_gate", (

@@ -1,10 +1,5 @@
 """
 payments.py — Payment / charge simulation for Shopfast.
-
-BUG (seeded): charge() accepts an idempotency_key parameter but never checks
-whether an order with that key already exists before inserting.  Retrying a
-charge with the same idempotency_key therefore creates a duplicate order row
-instead of returning the original one.  See KNOWN_BUG.md for details.
 """
 
 from __future__ import annotations
@@ -29,18 +24,12 @@ def charge(
     customer_id:      identifier for the customer being charged
     item:             description of the purchased item
     amount:           charge amount in USD
-    idempotency_key:  caller-supplied key intended to make retries safe
-                      (NOT currently enforced — see KNOWN_BUG.md)
+    idempotency_key:  caller-supplied key for retry deduplication
 
     Returns
     -------
     dict with the created order record.
     """
-    # ------------------------------------------------------------------ #
-    # BUG: the idempotency_key should be looked up here and the existing  #
-    # order returned if found.  The missing check is intentional for the  #
-    # regression test in tests/test_idempotency.py.                       #
-    # ------------------------------------------------------------------ #
     return create_order(
         customer_id=customer_id,
         item=item,

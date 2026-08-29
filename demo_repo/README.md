@@ -14,7 +14,7 @@ demo_repo/
 │   ├── __init__.py
 │   ├── db.py          # SQLite helpers (get_connection, init_db)
 │   ├── orders.py      # Order CRUD
-│   ├── payments.py    # Charge simulation (contains a seeded bug — see KNOWN_BUG.md)
+│   ├── payments.py    # Charge simulation
 │   ├── sessions.py    # In-memory session store
 │   └── main.py        # FastAPI application
 ├── tests/
@@ -23,9 +23,8 @@ demo_repo/
 │   ├── test_orders.py      # Order module tests
 │   ├── test_payments.py    # Payment module tests
 │   ├── test_sessions.py    # Session module tests
-│   └── test_idempotency.py # Regression test for the seeded bug (FAILS)
-├── README.md
-└── KNOWN_BUG.md
+│   └── test_idempotency.py # Idempotency regression test
+└── README.md
 ```
 
 ---
@@ -44,7 +43,6 @@ demo_repo/
 
 ### `app/payments.py`
 - `charge(customer_id, item, amount, idempotency_key=None) -> dict` — simulates charging a customer and records the resulting order.
-  > ⚠️ **Contains a seeded bug** — see [KNOWN_BUG.md](KNOWN_BUG.md).
 - `get_charge_by_idempotency_key(key) -> dict | None`
 
 ### `app/sessions.py`
@@ -89,7 +87,7 @@ python -m pytest
 ```
 
 Expected result:
-- **All tests pass** except `tests/test_idempotency.py::test_retry_charge_with_same_idempotency_key_creates_only_one_order` which **fails** intentionally.
+- **All tests pass** except `tests/test_idempotency.py::test_retry_charge_with_same_idempotency_key_creates_only_one_order` which **fails**.
 
 To run only the passing suite:
 

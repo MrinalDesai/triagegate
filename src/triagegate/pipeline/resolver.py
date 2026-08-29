@@ -28,7 +28,7 @@ class Resolver:
     Parameters
     ----------
     svm_threshold:
-        Minimum SVM confidence required for rung-1 resolution (default 0.75).
+        Minimum SVM confidence required for rung-1 resolution (default 0.55).
     agreement_min_voters:
         Minimum number of voters that must agree for rung-2 resolution (default 2).
     svm_model_path:
