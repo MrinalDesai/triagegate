@@ -5,7 +5,7 @@
 ---
 
 ## Architecture
-
+![TriageGate architecture](architecture.svg)
 ```mermaid
 flowchart TD
     T["Bug ticket<br/>title + description"] --> R{Resolver ladder}
