@@ -30,6 +30,10 @@ def charge(
     -------
     dict with the created order record.
     """
+    if idempotency_key is not None:
+        existing = get_charge_by_idempotency_key(idempotency_key)
+        if existing is not None:
+            return existing
     return create_order(
         customer_id=customer_id,
         item=item,
