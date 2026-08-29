@@ -14,6 +14,8 @@
 <div id="header">
   <span class="logo">Triage<em>Gate</em></span>
   <span class="badge" id="header-badge">POWERED BY IBM BOB 2.0</span>
+  <button type="button" id="bob-ping-btn" class="bob-ping-btn" title="Runs a minimal live Bob API call (~0.007 Bobcoin)">Test Bob connectivity</button>
+  <span id="bob-ping-result" class="bob-ping-result"></span>
 </div>
 
 <nav>
@@ -867,6 +869,35 @@ async function loadEscalation(ticketId, resolvedBy, title, desc) {
 }
 
 // ── Form submit ───────────────────────────────────────────────────────────────
+// --- Bob connectivity test (runs a minimal live ~0.007-coin Bob API call) ---
+(function () {
+  const btn = document.getElementById('bob-ping-btn');
+  const out = document.getElementById('bob-ping-result');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    out.textContent = 'pinging Bob…';
+    out.className = 'bob-ping-result pinging';
+    try {
+      const resp = await fetch('/api/bob/ping', { method: 'POST' });
+      const data = await resp.json();
+      if (data.ok) {
+        const cost = (data.cost != null) ? ` (cost ${Number(data.cost).toFixed(6)})` : '';
+        out.textContent = `✓ Bob API connected${cost}`;
+        out.className = 'bob-ping-result ok';
+      } else {
+        out.textContent = `✗ ${data.reason || 'not connected'}`;
+        out.className = 'bob-ping-result fail';
+      }
+    } catch (e) {
+      out.textContent = '✗ request failed';
+      out.className = 'bob-ping-result fail';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+})();
+
 // --- Demo presets: fill the form with a real example and route it live ---
 const DEMO_PRESETS = {
   svm: {

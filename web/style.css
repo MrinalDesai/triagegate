@@ -1061,3 +1061,27 @@ pre .diff-meta { color: var(--mute); }
   border-radius: 4px;
 }
 .demo-presets-note strong { color: var(--amber); }
+
+/* --- Bob connectivity test button --- */
+.bob-ping-btn {
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  color: var(--mute);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 10px;
+  margin-left: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.bob-ping-btn:hover:not(:disabled) { border-color: var(--signal); color: var(--signal); }
+.bob-ping-btn:disabled { opacity: 0.5; cursor: default; }
+.bob-ping-result {
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  margin-left: 10px;
+}
+.bob-ping-result.pinging { color: var(--mute); }
+.bob-ping-result.ok { color: var(--signal); }
+.bob-ping-result.fail { color: var(--red); }

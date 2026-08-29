@@ -126,6 +126,66 @@ def config() -> dict:
     return {"granite_enabled": granite_enabled}
 
 
+@app.post("/api/bob/ping")
+def bob_ping() -> dict:
+    """Run a minimal, cost-capped headless Bob call to verify connectivity.
+
+    Uses `bob run --mode ask --max-cost 0.10 --max-turns 1` with a trivial
+    prompt. Costs a fraction of a Bobcoin per call. Returns whether the Bob
+    API is reachable and authenticated, plus the session cost of this probe.
+    """
+    import subprocess
+    import shutil
+    import json as _json
+
+    api_key = os.environ.get("BOB_API_KEY", "")
+    if not api_key:
+        return {"ok": False, "reason": "BOB_API_KEY not set", "cost": None}
+
+    cli = os.environ.get("BOB_CLI", "bob")
+    resolved = cli if os.path.exists(cli) else (shutil.which(cli) or shutil.which("bob.cmd") or cli)
+
+    child_env = os.environ.copy()
+    child_env["BOB_API_KEY"] = api_key
+
+    argv = [
+        resolved, "run",
+        "--mode", "ask",
+        "--format", "json",
+        "--max-cost", "0.10",
+        "--max-turns", "1",
+        "--disable-mcp",
+        "--disable-subagents",
+        "--workspace", str(Path(__file__).resolve().parents[3]),
+        "--trust",
+        "--accept-license",
+        "Reply with exactly READY.",
+    ]
+    try:
+        proc = subprocess.run(
+            argv, capture_output=True, text=True, env=child_env,
+            timeout=60, shell=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "reason": f"{type(exc).__name__}", "cost": None}
+
+    # Parse the last JSON line from Bob's stdout
+    cost = None
+    status = None
+    for line in reversed(proc.stdout.splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                data = _json.loads(line)
+                status = data.get("status")
+                cost = data.get("stats", {}).get("session_costs")
+                break
+            except ValueError:
+                continue
+    ok = status == "success"
+    return {"ok": ok, "reason": ("connected" if ok else "backend error or non-success"), "cost": cost}
+
+
 @app.post("/api/route", response_model=LadderResult)
 def route_ticket(ticket: Ticket) -> LadderResult:
     result = _get_resolver().resolve(ticket)
