@@ -46,12 +46,36 @@ The `verdict` field must be one of:
 - `needs_human`  — root cause identified but fix requires human judgement or
   touches multiple systems
 
-## 7. Structured workflow
+## 7. Classify fix risk before patching
+After identifying the root cause (step 4 below) but **before applying any
+patch**, classify the risk level of the proposed fix:
+
+- **HIGH** if the patch touches any of the following high-sensitivity paths in
+  `demo_repo`:
+  - `app/payments.py` — payment processing code
+  - `app/sessions.py` — authentication / session management code
+  - Destructive database operations in `app/db.py` (e.g. `DELETE`, `DROP`,
+    `TRUNCATE`, or any function whose name contains `delete`, `purge`, `wipe`,
+    or `destroy`)
+- **LOW** for all other changes: pure logic fixes, formatting, read-only paths,
+  e.g. `app/orders.py` lookup functions.
+
+The EscalationReport **must** include:
+- `risk_level`: `"high"` or `"low"`
+- A one-sentence justification in `patch_summary` stating why that level was
+  assigned (e.g. *"Risk: LOW — patch only modifies order-lookup logic in
+  app/orders.py, no payment or auth code touched."*)
+- `auto_applied`: `true` only when `risk_level == "low"` (set `false` for HIGH
+  risk; the model will reject `auto_applied=true` with HIGH risk).
+
+## 8. Structured workflow
 1. Run `cd demo_repo && python -m pytest`; record the baseline as `tests_before`.
 2. Read the ticket title and description.
 3. Explore demo_repo/ — start with `README.md` then relevant source files.
 4. Identify the root-cause file and line.
-5. Apply a minimal patch (edit only production code, never tests).
-6. Run `cd demo_repo && python -m pytest`; capture the after summary as `tests_after`.
-7. Set verdict and populate all EscalationReport fields.
-8. Post the report to the API or via the helper script.
+5. Classify fix risk (Rule 7) and record `risk_level` + justification.
+6. Apply a minimal patch (edit only production code, never tests).
+7. Run `cd demo_repo && python -m pytest`; capture the after summary as `tests_after`.
+8. Set verdict and populate all EscalationReport fields (including `risk_level`
+   and `auto_applied`).
+9. Post the report to the API or via the helper script.

@@ -174,3 +174,117 @@ class TestEscalationEndpoints:
         payload = {k: v for k, v in MINIMAL_REPORT.items() if k != "root_cause"}
         response = client.post("/api/escalations/T-ESC-001/report", json=payload)
         assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Risk-gated autonomy tests
+# ---------------------------------------------------------------------------
+
+class TestRiskLevel:
+    """Validate risk_level / auto_applied model rules."""
+
+    def test_low_risk_default(self):
+        report = _make_report()
+        assert report.risk_level == "low"
+        assert report.auto_applied is False
+
+    def test_high_risk_explicit(self):
+        report = _make_report(risk_level="high")
+        assert report.risk_level == "high"
+
+    def test_low_risk_auto_applied_true_accepted(self):
+        report = _make_report(risk_level="low", auto_applied=True)
+        assert report.auto_applied is True
+        assert report.risk_level == "low"
+
+    def test_high_risk_auto_applied_true_rejected(self):
+        with pytest.raises(ValidationError):
+            _make_report(risk_level="high", auto_applied=True)
+
+    def test_high_risk_auto_applied_false_accepted(self):
+        report = _make_report(risk_level="high", auto_applied=False)
+        assert report.risk_level == "high"
+        assert report.auto_applied is False
+
+    def test_invalid_risk_level_raises(self):
+        with pytest.raises(ValidationError):
+            _make_report(risk_level="medium")
+
+    def test_risk_level_roundtrip_json_low(self):
+        report = _make_report(risk_level="low", auto_applied=True)
+        restored = EscalationReport.model_validate_json(report.model_dump_json())
+        assert restored.risk_level == "low"
+        assert restored.auto_applied is True
+
+    def test_risk_level_roundtrip_json_high(self):
+        report = _make_report(risk_level="high", auto_applied=False)
+        restored = EscalationReport.model_validate_json(report.model_dump_json())
+        assert restored.risk_level == "high"
+        assert restored.auto_applied is False
+
+
+class TestRiskLevelStore:
+    """risk_level and auto_applied survive store save/load roundtrip."""
+
+    def test_low_auto_applied_roundtrip(self, tmp_path):
+        store = EscalationStore(store_dir=tmp_path)
+        report = _make_report(risk_level="low", auto_applied=True)
+        store.save(report)
+        loaded = store.load("T-ESC-001")
+        assert loaded.risk_level == "low"
+        assert loaded.auto_applied is True
+
+    def test_high_no_auto_roundtrip(self, tmp_path):
+        store = EscalationStore(store_dir=tmp_path)
+        report = _make_report(risk_level="high", auto_applied=False)
+        store.save(report)
+        loaded = store.load("T-ESC-001")
+        assert loaded.risk_level == "high"
+        assert loaded.auto_applied is False
+
+
+class TestRiskLevelEndpoints:
+    """Risk fields flow through POST/GET endpoints correctly."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_store(self, tmp_path, monkeypatch):
+        import triagegate.web.server as server_module
+        fresh_store = EscalationStore(store_dir=tmp_path)
+        monkeypatch.setattr(server_module, "_escalation_store", fresh_store)
+
+    def test_post_low_risk_auto_applied_returns_201(self):
+        payload = {**MINIMAL_REPORT, "risk_level": "low", "auto_applied": True}
+        resp = client.post("/api/escalations/T-ESC-001/report", json=payload)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["risk_level"] == "low"
+        assert data["auto_applied"] is True
+
+    def test_post_high_risk_auto_applied_returns_422(self):
+        payload = {**MINIMAL_REPORT, "risk_level": "high", "auto_applied": True}
+        resp = client.post("/api/escalations/T-ESC-001/report", json=payload)
+        assert resp.status_code == 422
+
+    def test_post_high_risk_no_auto_returns_201(self):
+        payload = {**MINIMAL_REPORT, "risk_level": "high", "auto_applied": False}
+        resp = client.post("/api/escalations/T-ESC-001/report", json=payload)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["risk_level"] == "high"
+        assert data["auto_applied"] is False
+
+    def test_get_returns_risk_fields(self):
+        payload = {**MINIMAL_REPORT, "risk_level": "low", "auto_applied": True}
+        client.post("/api/escalations/T-ESC-001/report", json=payload)
+        data = client.get("/api/escalations/T-ESC-001").json()
+        assert data["risk_level"] == "low"
+        assert data["auto_applied"] is True
+
+    def test_risk_fields_default_in_response(self):
+        resp = client.post("/api/escalations/T-ESC-001/report", json=MINIMAL_REPORT)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert "risk_level" in data
+        assert "auto_applied" in data
+        assert data["risk_level"] == "low"
+        assert data["auto_applied"] is False

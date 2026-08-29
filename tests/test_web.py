@@ -76,3 +76,43 @@ class TestIndexHtmlRedirect:
         response = client.get("/index.html", follow_redirects=True)
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
+
+
+class TestServerConstruction:
+    """Server wiring: _make_llm_client returns None when credentials are absent."""
+
+    def test_llm_client_none_when_no_env_vars(self, monkeypatch):
+        """When all three WatsonX vars are absent, _make_llm_client returns None."""
+        monkeypatch.delenv("WATSONX_API_KEY", raising=False)
+        monkeypatch.delenv("WATSONX_PROJECT_ID", raising=False)
+        monkeypatch.delenv("WATSONX_URL", raising=False)
+        from triagegate.web.server import _make_llm_client
+        assert _make_llm_client() is None
+
+    def test_llm_client_none_when_partial_env_vars(self, monkeypatch):
+        """When only some WatsonX vars are set, _make_llm_client returns None."""
+        monkeypatch.setenv("WATSONX_API_KEY", "key123")
+        monkeypatch.delenv("WATSONX_PROJECT_ID", raising=False)
+        monkeypatch.delenv("WATSONX_URL", raising=False)
+        from triagegate.web.server import _make_llm_client
+        assert _make_llm_client() is None
+
+    def test_llm_client_returned_when_all_env_vars_present(self, monkeypatch):
+        """When all three WatsonX vars are present, _make_llm_client returns a client."""
+        monkeypatch.setenv("WATSONX_API_KEY", "key123")
+        monkeypatch.setenv("WATSONX_PROJECT_ID", "proj456")
+        monkeypatch.setenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
+        from triagegate.web.server import _make_llm_client
+        client_obj = _make_llm_client()
+        assert client_obj is not None
+
+    def test_resolver_still_works_without_llm(self, monkeypatch):
+        """Resolver created with llm_client=None (no WatsonX creds) still handles requests."""
+        monkeypatch.delenv("WATSONX_API_KEY", raising=False)
+        monkeypatch.delenv("WATSONX_PROJECT_ID", raising=False)
+        monkeypatch.delenv("WATSONX_URL", raising=False)
+        # Reset cached resolver so _make_llm_client is called fresh
+        import triagegate.web.server as server_module
+        monkeypatch.setattr(server_module, "_resolver", None)
+        response = client.get("/health")
+        assert response.status_code == 200

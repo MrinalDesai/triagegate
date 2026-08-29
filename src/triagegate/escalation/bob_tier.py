@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 # ---------------------------------------------------------------------------
 # Verdict type
@@ -28,6 +28,8 @@ class EscalationReport(BaseModel):
     tests_before: str  # e.g. "32 passed 1 failed"
     tests_after: str   # e.g. "33 passed"
     verdict: Verdict
+    risk_level: Literal["high", "low"] = "low"
+    auto_applied: bool = False
 
     @field_validator("verdict")
     @classmethod
@@ -36,6 +38,15 @@ class EscalationReport(BaseModel):
         if v not in allowed:
             raise ValueError(f"verdict must be one of {allowed!r}, got {v!r}")
         return v
+
+    @model_validator(mode="after")
+    def _auto_applied_requires_low_risk(self) -> "EscalationReport":
+        if self.auto_applied and self.risk_level != "low":
+            raise ValueError(
+                "auto_applied may only be True when risk_level is 'low'; "
+                f"got risk_level={self.risk_level!r}"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------

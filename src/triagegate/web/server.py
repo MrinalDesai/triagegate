@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict
@@ -8,7 +9,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+try:
+    from dotenv import load_dotenv  # type: ignore
+    load_dotenv()
+except ImportError:
+    pass
+
 from triagegate.escalation.bob_tier import EscalationReport, EscalationStore
+from triagegate.llm.client import GraniteClient
 from triagegate.models.ticket import LadderResult, RoutingDecision, Ticket
 from triagegate.pipeline.resolver import Resolver
 
@@ -34,10 +42,21 @@ _rung_counts: Dict[str, int] = defaultdict(int)
 _escalation_store = EscalationStore()
 
 
+def _make_llm_client():
+    """Return a GraniteClient when all three WatsonX env vars are present, else None."""
+    if (
+        os.environ.get("WATSONX_API_KEY")
+        and os.environ.get("WATSONX_PROJECT_ID")
+        and os.environ.get("WATSONX_URL")
+    ):
+        return GraniteClient()
+    return None
+
+
 def _get_resolver() -> Resolver:
     global _resolver
     if _resolver is None:
-        _resolver = Resolver()
+        _resolver = Resolver(llm_client=_make_llm_client())
     return _resolver
 
 

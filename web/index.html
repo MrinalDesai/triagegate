@@ -300,9 +300,21 @@ async function loadEscalation(ticketId, resolvedBy) {
     const verdictClass = { fix_verified: 'fix-verified', fix_failed: 'fix-failed', needs_human: 'needs-human' }[r.verdict] || 'needs-human';
     const verdictLabel = { fix_verified: '✓ FIX VERIFIED', fix_failed: '✗ FIX FAILED', needs_human: '⚠ NEEDS HUMAN' }[r.verdict] || r.verdict;
 
+    const riskLevel = (r.risk_level || 'low').toLowerCase();
+    const isHighRisk = riskLevel === 'high';
+    const riskBadgeClass = isHighRisk ? 'risk-badge risk-high' : 'risk-badge risk-low';
+    const riskBadgeLabel = isHighRisk ? 'HIGH RISK' : 'LOW RISK';
+    const riskSubLabel = isHighRisk
+      ? 'human approval required'
+      : (r.auto_applied ? 'auto-applied' : 'eligible for auto-apply');
+
     inner.innerHTML = `
-      <div class="mt-8" style="margin-bottom:16px">
+      <div class="mt-8 verdict-risk-row" style="margin-bottom:16px">
         <span class="verdict-badge ${verdictClass}">${verdictLabel}</span>
+        <span class="${riskBadgeClass}">
+          ${riskBadgeLabel}
+          <span class="risk-sub">${riskSubLabel}</span>
+        </span>
       </div>
 
       <div class="card-title mt-16">Root Cause</div>
