@@ -169,8 +169,9 @@ const PIPELINE_NODES = [
  * @param {boolean}     escalationSettled — true once Bob report has loaded
  * @param {string|null} verdict     — "fix_verified" | "fix_failed" | "needs_human" | null
  * @param {string|null} riskLevel   — "high" | "low" | null (from investigation report)
+ * @param {string|null} approvalStatus — "pending_approval"|"approved"|"rejected"|"auto_applied"|null
  */
-function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict, riskLevel) {
+function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict, riskLevel, approvalStatus) {
   const spine = document.getElementById('pipeline-spine');
   spine.innerHTML = '';
 
@@ -239,13 +240,21 @@ function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict, risk
       }
       // Human approval node
       if (!escalationSettled) {
-        // Report not yet arrived: dark (never-reached)
-        nodeStates['human'] = 'pp-dark';
-      } else if (verdict === 'needs_human') {
-        // Pulsing red — awaiting human
-        nodeStates['human'] = 'pp-human-pending';
+        // Report not yet arrived or pending approval on high-risk: pulsing/dark
+        if (riskLevel === 'high') {
+          // High-risk with pending approval: pulsing red awaiting decision
+          nodeStates['human'] = 'pp-human-pending';
+        } else {
+          nodeStates['human'] = 'pp-dark';
+        }
+      } else if (approvalStatus === 'approved') {
+        // Explicitly approved: solid green
+        nodeStates['human'] = 'pp-human-approved';
+      } else if (approvalStatus === 'rejected') {
+        // Rejected: solid red
+        nodeStates['human'] = 'pp-human-lit';
       } else if (riskLevel === 'high') {
-        // Report settled with high risk: solid red (approved/denied)
+        // High-risk, settled but no explicit approval status: solid red
         nodeStates['human'] = 'pp-human-lit';
       } else {
         // Low risk: auto-applied, human approval bypassed (dim-traversed)
@@ -253,8 +262,8 @@ function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict, risk
       }
       // vline bob → human
       vlineStates[5] = escalationSettled ? (riskLevel === 'high' ? 'pp-amber' : 'pp-traversed') : '';
-      // Resolved: only lights if report is settled and not needs_human
-      if (escalationSettled && verdict && verdict !== 'needs_human') {
+      // Resolved: lights only when settled, not rejected, and not needs_human
+      if (escalationSettled && approvalStatus !== 'rejected' && verdict && verdict !== 'needs_human') {
         vlineStates[6] = verdict === 'fix_failed' ? 'pp-amber' : 'pp-lit';
         if (verdict === 'fix_verified') {
           nodeStates['resolved'] = 'pp-resolved';
@@ -264,7 +273,7 @@ function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict, risk
           nodeStates['resolved'] = 'pp-resolved';
         }
       } else {
-        // Resolved stays dark when needs_human or no verdict yet
+        // Resolved stays dark when needs_human, rejected, or no verdict yet
         nodeStates['resolved'] = 'pp-dark';
       }
     }
@@ -290,8 +299,15 @@ function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict, risk
 
     const pill = document.createElement('div');
     pill.id = 'ppn-' + node.id;
-    pill.className = 'pp-node ' + (nodeStates[node.id] || 'pp-dark');
-    pill.textContent = node.label;
+    const nodeClass = nodeStates[node.id] || 'pp-dark';
+    pill.className = 'pp-node ' + nodeClass;
+    // Override label for human node based on approval state
+    let nodeLabel = node.label;
+    if (node.id === 'human') {
+      if (nodeClass === 'pp-human-approved') nodeLabel = 'Approved';
+      else if (nodeClass === 'pp-human-lit')  nodeLabel = 'Human approval';
+    }
+    pill.textContent = nodeLabel;
     step.appendChild(pill);
 
     if (node.hasBranch) {
@@ -447,20 +463,73 @@ function _clearPoll() {
 
 async function _renderReport(r, resolvedBy) {
   const inner = document.getElementById('escalation-inner');
+  const status    = r.status || 'pending_approval';
+  const riskLevel = (r.risk_level || 'low').toLowerCase();
+  const isHighRisk = riskLevel === 'high';
 
-  // Settle the pipeline node now that the report has loaded
-  buildPipeline(resolvedBy, true, true, r.verdict, (r.risk_level || 'low').toLowerCase());
+  // For pipeline: treat approved/auto_applied/rejected as settled
+  const isSettled = status === 'approved' || status === 'auto_applied' ||
+                    status === 'rejected';
+  buildPipeline(resolvedBy, true, isSettled, r.verdict, riskLevel, status);
 
   const verdictClass = { fix_verified: 'fix-verified', fix_failed: 'fix-failed', needs_human: 'needs-human' }[r.verdict] || 'needs-human';
   const verdictLabel = { fix_verified: '✓ FIX VERIFIED', fix_failed: '✗ FIX FAILED', needs_human: '⚠ NEEDS HUMAN' }[r.verdict] || r.verdict;
 
-  const riskLevel = (r.risk_level || 'low').toLowerCase();
-  const isHighRisk = riskLevel === 'high';
   const riskBadgeClass = isHighRisk ? 'risk-badge risk-high' : 'risk-badge risk-low';
   const riskBadgeLabel = isHighRisk ? 'HIGH RISK' : 'LOW RISK';
   const riskSubLabel = isHighRisk
-    ? 'human approval required'
-    : (r.auto_applied ? 'auto-applied' : 'eligible for auto-apply');
+    ? (status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : 'human approval required')
+    : (r.auto_applied || status === 'auto_applied' ? 'auto-applied' : 'eligible for auto-apply');
+
+  // Root cause analysis section
+  const rcaHtml = r.root_cause_analysis
+    ? r.root_cause_analysis.trim().split(/\n{2,}/).map(p =>
+        `<p style="margin-bottom:10px;color:var(--mute)">${esc(p.trim())}</p>`
+      ).join('')
+    : `<p style="margin-bottom:10px;color:var(--mute)">${esc(r.root_cause)}</p>`;
+
+  // Code fix section
+  let codeFixHtml = '';
+  if (r.code_before || r.code_after) {
+    codeFixHtml = `
+    <div class="card-title mt-16">Code Fix</div>
+    <div class="code-fix-wrap">
+      <div class="code-fix-block code-before">
+        <label>Before</label>
+        <pre id="code-before-block"></pre>
+      </div>
+      <div class="code-fix-block code-after">
+        <label>After</label>
+        <pre id="code-after-block"></pre>
+      </div>
+    </div>`;
+  }
+
+  // Approval row (only for high-risk pending_approval)
+  let approvalHtml = '';
+  if (isHighRisk && status === 'pending_approval') {
+    approvalHtml = `
+    <div class="approval-row" id="approval-row">
+      <button class="btn-approve" id="btn-approve">✔ APPROVE</button>
+      <button class="btn-reject" id="btn-reject">Reject</button>
+    </div>`;
+  } else if (status === 'approved') {
+    approvalHtml = `
+    <div class="approval-row">
+      <span class="approval-badge approved">APPROVED ✓</span>
+      <span class="approval-note">Recorded to incident history.</span>
+    </div>`;
+  } else if (status === 'rejected') {
+    approvalHtml = `
+    <div class="approval-row">
+      <span class="approval-badge rejected">REJECTED</span>
+    </div>`;
+  } else if (!isHighRisk && (r.auto_applied || status === 'auto_applied')) {
+    approvalHtml = `
+    <div class="approval-row">
+      <span class="approval-badge approved">AUTO-APPLIED ✓</span>
+    </div>`;
+  }
 
   inner.innerHTML = `
     <div class="mt-8 verdict-risk-row" style="margin-bottom:16px">
@@ -471,8 +540,10 @@ async function _renderReport(r, resolvedBy) {
       </span>
     </div>
 
-    <div class="card-title mt-16">Root Cause</div>
-    <p style="margin-bottom:16px;color:var(--mute)">${esc(r.root_cause)}</p>
+    <div class="card-title mt-16">Root Cause Analysis</div>
+    <div style="margin-bottom:16px">${rcaHtml}</div>
+
+    ${codeFixHtml}
 
     <div class="card-title">Patch Summary</div>
     <p style="margin-bottom:16px;color:var(--mute)">${esc(r.patch_summary)}</p>
@@ -490,8 +561,60 @@ async function _renderReport(r, resolvedBy) {
       <div class="tests-block"><label>Before</label><code>${esc(r.tests_before)}</code></div>
       <div class="tests-block"><label>After</label><code>${esc(r.tests_after)}</code></div>
     </div>
+
+    ${approvalHtml}
   `;
+
   renderDiff(document.getElementById('diff-block'), r.diff);
+
+  // Populate code-before/after blocks (preserve whitespace, no diff colouring)
+  if (r.code_before || r.code_after) {
+    const beforeEl = document.getElementById('code-before-block');
+    const afterEl  = document.getElementById('code-after-block');
+    if (beforeEl) beforeEl.textContent = r.code_before || '';
+    if (afterEl)  afterEl.textContent  = r.code_after  || '';
+  }
+
+  // Wire up approve/reject buttons
+  if (isHighRisk && status === 'pending_approval') {
+    const btnApprove = document.getElementById('btn-approve');
+    const btnReject  = document.getElementById('btn-reject');
+    const ticketId   = r.ticket_id;
+
+    btnApprove.addEventListener('click', async () => {
+      btnApprove.disabled = true;
+      btnReject.disabled  = true;
+      try {
+        const resp = await fetch(`/api/escalations/${encodeURIComponent(ticketId)}/approve`, { method: 'POST' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const updated = await resp.json();
+        await _renderReport(updated, resolvedBy);
+      } catch (e) {
+        btnApprove.disabled = false;
+        btnReject.disabled  = false;
+        const row = document.getElementById('approval-row');
+        if (row) row.insertAdjacentHTML('beforeend',
+          `<span style="color:var(--red);font-size:11px">${esc(String(e))}</span>`);
+      }
+    });
+
+    btnReject.addEventListener('click', async () => {
+      btnApprove.disabled = true;
+      btnReject.disabled  = true;
+      try {
+        const resp = await fetch(`/api/escalations/${encodeURIComponent(ticketId)}/reject`, { method: 'POST' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const updated = await resp.json();
+        await _renderReport(updated, resolvedBy);
+      } catch (e) {
+        btnApprove.disabled = false;
+        btnReject.disabled  = false;
+        const row = document.getElementById('approval-row');
+        if (row) row.insertAdjacentHTML('beforeend',
+          `<span style="color:var(--red);font-size:11px">${esc(String(e))}</span>`);
+      }
+    });
+  }
 }
 
 async function loadEscalation(ticketId, resolvedBy) {
@@ -506,7 +629,7 @@ async function loadEscalation(ticketId, resolvedBy) {
     try {
       const resp = await fetch(`/api/escalations/${encodeURIComponent(ticketId)}`);
       if (resp.ok) {
-        // Report is ready — stop polling and render
+        // Report exists — stop polling and render regardless of status
         _clearPoll();
         const r = await resp.json();
         await _renderReport(r, resolvedBy);

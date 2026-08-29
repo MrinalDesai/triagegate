@@ -243,6 +243,71 @@ class TestRiskLevelStore:
         assert loaded.auto_applied is False
 
 
+# ---------------------------------------------------------------------------
+# Status / RCA / code_before / code_after model tests
+# ---------------------------------------------------------------------------
+
+class TestApprovalFields:
+    """status, root_cause_analysis, code_before, code_after model fields."""
+
+    def test_status_default_is_pending_approval(self):
+        report = _make_report()
+        assert report.status == "pending_approval"
+
+    def test_status_approved(self):
+        report = _make_report(status="approved")
+        assert report.status == "approved"
+
+    def test_status_rejected(self):
+        report = _make_report(status="rejected")
+        assert report.status == "rejected"
+
+    def test_status_auto_applied(self):
+        report = _make_report(status="auto_applied")
+        assert report.status == "auto_applied"
+
+    def test_status_invalid_raises(self):
+        with pytest.raises(ValidationError):
+            _make_report(status="unknown_state")
+
+    def test_rca_default_empty(self):
+        report = _make_report()
+        assert report.root_cause_analysis == ""
+
+    def test_rca_roundtrip(self):
+        rca = "First paragraph.\n\nSecond paragraph."
+        report = _make_report(root_cause_analysis=rca)
+        restored = EscalationReport.model_validate_json(report.model_dump_json())
+        assert restored.root_cause_analysis == rca
+
+    def test_code_before_default_empty(self):
+        report = _make_report()
+        assert report.code_before == ""
+
+    def test_code_after_default_empty(self):
+        report = _make_report()
+        assert report.code_after == ""
+
+    def test_code_before_after_roundtrip(self):
+        report = _make_report(code_before="def foo():\n    pass\n", code_after="def foo():\n    return 1\n")
+        restored = EscalationReport.model_validate_json(report.model_dump_json())
+        assert restored.code_before == "def foo():\n    pass\n"
+        assert restored.code_after == "def foo():\n    return 1\n"
+
+    def test_all_new_fields_in_json(self):
+        report = _make_report(
+            status="approved",
+            root_cause_analysis="RCA text",
+            code_before="before",
+            code_after="after",
+        )
+        data = json.loads(report.model_dump_json())
+        assert data["status"] == "approved"
+        assert data["root_cause_analysis"] == "RCA text"
+        assert data["code_before"] == "before"
+        assert data["code_after"] == "after"
+
+
 class TestRiskLevelEndpoints:
     """Risk fields flow through POST/GET endpoints correctly."""
 
@@ -288,3 +353,129 @@ class TestRiskLevelEndpoints:
         assert "auto_applied" in data
         assert data["risk_level"] == "low"
         assert data["auto_applied"] is False
+
+
+# ---------------------------------------------------------------------------
+# Approve / reject endpoint tests
+# ---------------------------------------------------------------------------
+
+class TestApproveRejectEndpoints:
+    """Approve and reject endpoints for escalation reports."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_store(self, tmp_path, monkeypatch):
+        import triagegate.web.server as server_module
+        fresh_store = EscalationStore(store_dir=tmp_path)
+        monkeypatch.setattr(server_module, "_escalation_store", fresh_store)
+
+    def test_approve_missing_ticket_returns_404(self):
+        resp = client.post("/api/escalations/NOEXIST-999/approve")
+        assert resp.status_code == 404
+
+    def test_reject_missing_ticket_returns_404(self):
+        resp = client.post("/api/escalations/NOEXIST-999/reject")
+        assert resp.status_code == 404
+
+    def test_approve_pending_sets_status_approved(self):
+        client.post("/api/escalations/T-ESC-001/report", json={**MINIMAL_REPORT, "risk_level": "high"})
+        resp = client.post("/api/escalations/T-ESC-001/approve")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "approved"
+
+    def test_reject_pending_sets_status_rejected(self):
+        client.post("/api/escalations/T-ESC-001/report", json={**MINIMAL_REPORT, "risk_level": "high"})
+        resp = client.post("/api/escalations/T-ESC-001/reject")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "rejected"
+
+    def test_approve_twice_returns_409(self):
+        client.post("/api/escalations/T-ESC-001/report", json={**MINIMAL_REPORT, "risk_level": "high"})
+        client.post("/api/escalations/T-ESC-001/approve")
+        resp = client.post("/api/escalations/T-ESC-001/approve")
+        assert resp.status_code == 409
+
+    def test_reject_after_approve_returns_409(self):
+        client.post("/api/escalations/T-ESC-001/report", json={**MINIMAL_REPORT, "risk_level": "high"})
+        client.post("/api/escalations/T-ESC-001/approve")
+        resp = client.post("/api/escalations/T-ESC-001/reject")
+        assert resp.status_code == 409
+
+    def test_get_after_approve_reflects_approved_status(self):
+        client.post("/api/escalations/T-ESC-001/report", json={**MINIMAL_REPORT, "risk_level": "high"})
+        client.post("/api/escalations/T-ESC-001/approve")
+        data = client.get("/api/escalations/T-ESC-001").json()
+        assert data["status"] == "approved"
+
+    def test_get_after_reject_reflects_rejected_status(self):
+        client.post("/api/escalations/T-ESC-001/report", json={**MINIMAL_REPORT, "risk_level": "high"})
+        client.post("/api/escalations/T-ESC-001/reject")
+        data = client.get("/api/escalations/T-ESC-001").json()
+        assert data["status"] == "rejected"
+
+    def test_approve_response_contains_status_field(self):
+        client.post("/api/escalations/T-ESC-001/report", json=MINIMAL_REPORT)
+        resp = client.post("/api/escalations/T-ESC-001/approve")
+        assert resp.status_code == 200
+        assert "status" in resp.json()
+
+    def test_new_fields_present_in_get_response(self):
+        client.post("/api/escalations/T-ESC-001/report", json=MINIMAL_REPORT)
+        data = client.get("/api/escalations/T-ESC-001").json()
+        for field in ("status", "root_cause_analysis", "code_before", "code_after"):
+            assert field in data, f"missing field: {field}"
+
+
+# ---------------------------------------------------------------------------
+# Incident history CSV tests
+# ---------------------------------------------------------------------------
+
+class TestIncidentHistoryCSV:
+    """Approving a report appends a row to incident_history.csv."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_store_and_csv(self, tmp_path, monkeypatch):
+        import triagegate.web.server as server_module
+        fresh_store = EscalationStore(store_dir=tmp_path)
+        monkeypatch.setattr(server_module, "_escalation_store", fresh_store)
+        # Redirect the history CSV to a temp file
+        csv_path = tmp_path / "incident_history.csv"
+        monkeypatch.setattr(server_module, "_INCIDENT_HISTORY_CSV", csv_path)
+        self.csv_path = csv_path
+
+    def test_approve_appends_row_to_csv(self):
+        client.post("/api/escalations/T-ESC-001/report", json=MINIMAL_REPORT)
+        client.post("/api/escalations/T-ESC-001/approve")
+        assert self.csv_path.exists()
+        import csv as csv_mod
+        rows = list(csv_mod.DictReader(self.csv_path.read_text(encoding="utf-8").splitlines()))
+        assert len(rows) == 1
+        assert rows[0]["id"] == "T-ESC-001"
+        assert rows[0]["verdict"] == "fix_verified"
+        assert rows[0]["risk_level"] == "low"
+
+    def test_reject_does_not_append_csv(self):
+        client.post("/api/escalations/T-ESC-001/report", json=MINIMAL_REPORT)
+        client.post("/api/escalations/T-ESC-001/reject")
+        assert not self.csv_path.exists()
+
+    def test_approve_with_rca_uses_first_line_as_impact(self):
+        rca = "Primary root cause line.\n\nSecondary details."
+        client.post("/api/escalations/T-ESC-001/report", json={**MINIMAL_REPORT, "root_cause_analysis": rca})
+        client.post("/api/escalations/T-ESC-001/approve")
+        import csv as csv_mod
+        rows = list(csv_mod.DictReader(self.csv_path.read_text(encoding="utf-8").splitlines()))
+        assert rows[0]["impact"] == "Primary root cause line."
+
+    def test_approve_without_rca_uses_root_cause(self):
+        client.post("/api/escalations/T-ESC-001/report", json=MINIMAL_REPORT)
+        client.post("/api/escalations/T-ESC-001/approve")
+        import csv as csv_mod
+        rows = list(csv_mod.DictReader(self.csv_path.read_text(encoding="utf-8").splitlines()))
+        assert rows[0]["impact"] == MINIMAL_REPORT["root_cause"]
+
+    def test_csv_domain_is_escalated(self):
+        client.post("/api/escalations/T-ESC-001/report", json=MINIMAL_REPORT)
+        client.post("/api/escalations/T-ESC-001/approve")
+        import csv as csv_mod
+        rows = list(csv_mod.DictReader(self.csv_path.read_text(encoding="utf-8").splitlines()))
+        assert rows[0]["domain"] == "escalated"

@@ -249,3 +249,8 @@ T-0047,"ci/docker.py, scripts/build.py",low,OOM in test runner caused 1398 flaky
 T-0048,"ci/deploy.py, ci/docker.py",low,Broken artifact prevented 2746 deployments to production.,all passed,fix_verified
 T-0049,"ci/docker.py, ci/deploy.py",low,OOM in test runner caused 1276 flaky test suite runs.,all passed,fix_verified
 T-0050,"ci/deploy.py, scripts/release.py",low,Broken artifact prevented 1945 deployments to production.,all passed,fix_verified
+T-ESC-001,T-ESC-001,escalated,high,Off-by-one in payment loop,fix_verified
+T-ESC-001,T-ESC-001,escalated,high,Off-by-one in payment loop,fix_verified
+T-ESC-001,T-ESC-001,escalated,high,Off-by-one in payment loop,fix_verified
+T-ESC-001,T-ESC-001,escalated,high,Off-by-one in payment loop,fix_verified
+T-ESC-001,T-ESC-001,escalated,low,Off-by-one in payment loop,fix_verified

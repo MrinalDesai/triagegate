@@ -450,6 +450,14 @@ button[type="submit"]:disabled { opacity: .4; cursor: not-allowed; }
   box-shadow: 0 0 10px 2px rgba(255,93,93,.15), 0 0 0 1px var(--red);
 }
 
+/* HUMAN APPROVAL — solid green (approved) */
+.pp-node.pp-human-approved {
+  border-color: var(--signal);
+  color: var(--signal);
+  background: rgba(61,220,132,.10);
+  box-shadow: 0 0 10px 2px rgba(61,220,132,.18), 0 0 0 1px var(--signal);
+}
+
 /* HUMAN APPROVAL — dim traversed (low-risk, bypassed by auto-apply) */
 .pp-node.pp-human-bypass {
   border-color: rgba(255,93,93,.3);
@@ -798,6 +806,142 @@ pre .diff-meta { color: var(--mute); }
   border: 1px solid var(--signal-dim);
   border-radius: 20px;
   padding: 3px 10px;
+}
+
+/* ── Code fix blocks (before / after) ──────────────────────────────────────── */
+.code-fix-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.code-fix-block {
+  border-radius: 8px;
+  overflow: hidden;
+  border-left: 3px solid;
+}
+
+.code-fix-block label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-bottom: 1px solid;
+}
+
+.code-fix-block pre {
+  margin: 0;
+  border-radius: 0;
+  border: none;
+  font-size: 12px;
+}
+
+.code-fix-block.code-before {
+  border-color: var(--red);
+  background: rgba(255, 93, 93, 0.06);
+}
+
+.code-fix-block.code-before label {
+  color: var(--red);
+  background: rgba(255, 93, 93, 0.12);
+  border-color: rgba(255, 93, 93, 0.2);
+}
+
+.code-fix-block.code-before pre {
+  background: rgba(255, 93, 93, 0.04);
+}
+
+.code-fix-block.code-after {
+  border-color: var(--signal);
+  background: rgba(61, 220, 132, 0.06);
+}
+
+.code-fix-block.code-after label {
+  color: var(--signal);
+  background: rgba(61, 220, 132, 0.12);
+  border-color: rgba(61, 220, 132, 0.2);
+}
+
+.code-fix-block.code-after pre {
+  background: rgba(61, 220, 132, 0.04);
+}
+
+/* ── Approval action row ────────────────────────────────────────────────────── */
+.approval-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.btn-approve {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  color: #000;
+  background: var(--signal);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 24px;
+  cursor: pointer;
+  letter-spacing: .02em;
+  transition: opacity .15s;
+}
+
+.btn-approve:hover { opacity: .85; }
+.btn-approve:disabled { opacity: .4; cursor: not-allowed; }
+
+.btn-reject {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--red);
+  background: rgba(255, 93, 93, 0.10);
+  border: 1px solid #533;
+  border-radius: 8px;
+  padding: 8px 18px;
+  cursor: pointer;
+  letter-spacing: .04em;
+  transition: opacity .15s;
+}
+
+.btn-reject:hover { opacity: .75; }
+.btn-reject:disabled { opacity: .4; cursor: not-allowed; }
+
+.approval-badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 20px;
+}
+
+.approval-badge.approved {
+  color: var(--signal);
+  background: rgba(61, 220, 132, 0.12);
+  border: 1px solid var(--signal-dim);
+}
+
+.approval-badge.rejected {
+  color: var(--red);
+  background: rgba(255, 93, 93, 0.12);
+  border: 1px solid #533;
+}
+
+.approval-note {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--mute);
+  margin-top: 8px;
 }
 
 /* ── Utility ───────────────────────────────────────────────────────────────── */

@@ -113,6 +113,66 @@ class TestNewStaticContent:
         response = client.get("/style.css")
         assert "chip-risk-high" in response.text
 
+    def test_style_contains_code_fix_wrap(self):
+        """style.css must define code-fix-wrap for code diff blocks."""
+        response = client.get("/style.css")
+        assert "code-fix-wrap" in response.text
+
+    def test_style_contains_code_before(self):
+        """style.css must define code-before class."""
+        response = client.get("/style.css")
+        assert "code-before" in response.text
+
+    def test_style_contains_code_after(self):
+        """style.css must define code-after class."""
+        response = client.get("/style.css")
+        assert "code-after" in response.text
+
+    def test_style_contains_btn_approve(self):
+        """style.css must define btn-approve class."""
+        response = client.get("/style.css")
+        assert "btn-approve" in response.text
+
+    def test_style_contains_btn_reject(self):
+        """style.css must define btn-reject class."""
+        response = client.get("/style.css")
+        assert "btn-reject" in response.text
+
+    def test_style_contains_approval_badge(self):
+        """style.css must define approval-badge class."""
+        response = client.get("/style.css")
+        assert "approval-badge" in response.text
+
+    def test_style_contains_approval_row(self):
+        """style.css must define approval-row class."""
+        response = client.get("/style.css")
+        assert "approval-row" in response.text
+
+    def test_style_contains_pp_human_approved(self):
+        """style.css must define pp-human-approved pipeline node class."""
+        response = client.get("/style.css")
+        assert "pp-human-approved" in response.text
+
+    def test_index_contains_root_cause_analysis(self):
+        """index.html must reference Root Cause Analysis section."""
+        response = client.get("/")
+        assert "Root Cause Analysis" in response.text
+
+    def test_index_contains_code_fix_block(self):
+        """index.html JS must reference code-fix-block for diff rendering."""
+        response = client.get("/")
+        assert "code-fix-block" in response.text
+
+    def test_index_contains_btn_approve(self):
+        """index.html JS must include the approve button class."""
+        response = client.get("/")
+        assert "btn-approve" in response.text
+
+    def test_index_contains_btn_reject(self):
+        """index.html JS must include the reject button class."""
+        response = client.get("/")
+        assert "btn-reject" in response.text
+
 
 class TestIndexHtmlRedirect:
     def test_index_html_redirects(self):

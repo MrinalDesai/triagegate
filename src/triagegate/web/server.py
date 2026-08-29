@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import os
 from collections import defaultdict
 from pathlib import Path
@@ -19,6 +20,9 @@ from triagegate.escalation.bob_tier import EscalationReport, EscalationStore
 from triagegate.llm.client import GraniteClient
 from triagegate.models.ticket import LadderResult, RoutingDecision, Ticket
 from triagegate.pipeline.resolver import Resolver
+
+_DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+_INCIDENT_HISTORY_CSV = _DATA_DIR / "incident_history.csv"
 
 app = FastAPI(title="TriageGate")
 
@@ -144,3 +148,76 @@ def get_escalation_report(ticket_id: str) -> EscalationReport:
     if report is None:
         raise HTTPException(status_code=404, detail=f"No escalation report for ticket {ticket_id!r}")
     return report
+
+
+@app.post("/api/escalations/{ticket_id}/approve", response_model=EscalationReport)
+def approve_escalation(ticket_id: str) -> EscalationReport:
+    """Approve a pending escalation report; append incident to history CSV."""
+    report = _escalation_store.load(ticket_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail=f"No escalation report for ticket {ticket_id!r}")
+    if report.status != "pending_approval":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot approve: report status is {report.status!r}, expected 'pending_approval'",
+        )
+    report = report.model_copy(update={"status": "approved"})
+    _escalation_store.save(report)
+
+    # Append to incident history CSV
+    _append_incident_history(report)
+
+    # Reload the resolver's history so future tickets see this incident
+    if _resolver is not None:
+        from triagegate.pipeline.resolver import _DEFAULT_HISTORY_CSV
+        history_path = Path(_INCIDENT_HISTORY_CSV)
+        if history_path.exists():
+            from triagegate.pipeline.resolver import Resolver as _R
+            _resolver._history = _R._load_history(history_path)
+
+    return report
+
+
+@app.post("/api/escalations/{ticket_id}/reject", response_model=EscalationReport)
+def reject_escalation(ticket_id: str) -> EscalationReport:
+    """Reject a pending escalation report."""
+    report = _escalation_store.load(ticket_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail=f"No escalation report for ticket {ticket_id!r}")
+    if report.status != "pending_approval":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot reject: report status is {report.status!r}, expected 'pending_approval'",
+        )
+    report = report.model_copy(update={"status": "rejected"})
+    _escalation_store.save(report)
+    return report
+
+
+def _append_incident_history(report: EscalationReport) -> None:
+    """Append one row to data/incident_history.csv for an approved report."""
+    _INCIDENT_HISTORY_CSV.parent.mkdir(parents=True, exist_ok=True)
+    file_exists = _INCIDENT_HISTORY_CSV.exists()
+    fieldnames = ["id", "title", "domain", "risk_level", "impact", "verdict"]
+    # title: use ticket_id as fallback; domain: from report if present else "escalated"
+    title = report.ticket_id
+    domain = "escalated"
+    # impact: first non-empty line of root_cause_analysis, else root_cause
+    rca = report.root_cause_analysis.strip()
+    if rca:
+        impact = rca.splitlines()[0].strip()
+    else:
+        impact = report.root_cause.splitlines()[0].strip()
+    row = {
+        "id": report.ticket_id,
+        "title": title,
+        "domain": domain,
+        "risk_level": report.risk_level,
+        "impact": impact,
+        "verdict": report.verdict,
+    }
+    with open(_INCIDENT_HISTORY_CSV, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)

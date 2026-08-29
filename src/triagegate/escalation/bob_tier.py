@@ -30,6 +30,11 @@ class EscalationReport(BaseModel):
     verdict: Verdict
     risk_level: Literal["high", "low"] = "low"
     auto_applied: bool = False
+    # Approval workflow fields
+    status: Literal["pending_approval", "approved", "rejected", "auto_applied"] = "pending_approval"
+    root_cause_analysis: str = ""
+    code_before: str = ""
+    code_after: str = ""
 
     @field_validator("verdict")
     @classmethod
