@@ -38,6 +38,21 @@
 
       <button type="submit" id="submit-btn">▶ Route Ticket</button>
     </form>
+
+    <div id="demo-presets" class="demo-presets">
+      <div class="demo-presets-label">Demo presets — one click fills and routes</div>
+      <div class="demo-presets-row">
+        <button type="button" class="preset-btn" data-preset="svm">SVM gate · instant</button>
+        <button type="button" class="preset-btn" data-preset="voter">Voter agreement</button>
+        <button type="button" class="preset-btn" data-preset="granite">Granite tiebreak</button>
+        <button type="button" class="preset-btn" data-preset="escalate">Escalation → Bob</button>
+      </div>
+      <div class="demo-presets-note">
+        The escalation preset replays a <strong>recorded live Bob investigation</strong>
+        (ticket A-0007). Run <code>python scripts/seed_demo_report.py</code> first to load it.
+        Routing presets classify live in real time.
+      </div>
+    </div>
   </div>
 
   <!-- Result area (hidden until response) -->
@@ -852,6 +867,42 @@ async function loadEscalation(ticketId, resolvedBy, title, desc) {
 }
 
 // ── Form submit ───────────────────────────────────────────────────────────────
+// --- Demo presets: fill the form with a real example and route it live ---
+const DEMO_PRESETS = {
+  svm: {
+    id: 'T-1',
+    title: 'POST /orders returns 500 after deploy',
+    desc: 'The rest endpoint /orders responds with a 500 status on every request since the last deploy. Response payload is empty and the api timeout fires.',
+  },
+  voter: {
+    id: 'T-2',
+    title: 'everything slow since yesterday',
+    desc: 'Not sure what happened but the whole app crawls. Nothing in the error logs. Restarting the container helps for an hour then it comes back.',
+  },
+  granite: {
+    id: 'T-3',
+    title: 'login page renders wrong after migration',
+    desc: 'users see broken css but the session query also looks slow after the last database migration, hard to tell which side is at fault',
+  },
+  escalate: {
+    id: 'A-0007',
+    title: 'customers billed twice for one purchase',
+    desc: 'A few people say they were billed two times. The payment provider dashboard shows a single charge yet their purchase history lists it twice. Started recently, no pattern we can see.',
+  },
+};
+
+document.querySelectorAll('.preset-btn').forEach((b) => {
+  b.addEventListener('click', () => {
+    const p = DEMO_PRESETS[b.dataset.preset];
+    if (!p) return;
+    document.getElementById('ticket-id').value = p.id;
+    document.getElementById('ticket-title').value = p.title;
+    document.getElementById('ticket-desc').value = p.desc;
+    // Reuse the exact live submit path — routing is real, not canned.
+    document.getElementById('ticket-form').requestSubmit();
+  });
+});
+
 document.getElementById('ticket-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
