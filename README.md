@@ -6,39 +6,43 @@
 
 ## Architecture
 
-```
-Ticket
-  │
-  ▼
-┌──────────────┐
-│  SVM Gate    │  Confidence ≥ 0.55 → route immediately
-└──────┬───────┘
-       │ < 0.55
-       ▼
-┌──────────────┐
-│    Voters    │  Three voters: SVM, kNN, deterministic scorer
-│              │  ≥ 2 matching votes + scorer evidence → route
-└──────┬───────┘
-       │ no agreement
-       ▼
-┌──────────────┐
-│   Granite    │  Optional fourth voter — consulted only when voters
-│  tiebreak    │  disagree (requires credentials; skipped when offline)
-└──────┬───────┘
-       │ still uncertain
-       ▼
-┌──────────────┐
-│     Bob      │  IBM Bob 2.0 Bug Investigator mode:
-│ Investigator │  root-cause analysis → risk classification →
-│              │  HIGH risk: present diff, ask human for approval
-│              │  LOW risk: auto-apply, run tests
-└──────┬───────┘
-       │
-       ▼
-   Resolved
+```mermaid
+flowchart TD
+    T["Bug ticket<br/>title + description"] --> R{Resolver ladder}
+
+    R -->|"RUNG 1 · SVM confidence ≥ 0.55"| G["svm_gate — route instantly"]
+    R -->|"RUNG 2 · ≥2 voters agree + scorer evidence"| V["voter_agreement — route by majority"]
+    R -->|"RUNG 2.5 · voters disagree, Granite backs a voter"| GR["granite_tiebreak · watsonx.ai"]
+    R -->|"RUNG 3 · no confident route"| E["escalate"]
+
+    E --> D["Dispatch to Bob Investigator<br/>bob run --mode bug-investigator"]
+    D --> BI["Bob: read repo, run baseline tests, classify risk"]
+
+    BI -->|"LOW risk"| AA["Auto-apply patch, run tests"]
+    BI -->|"HIGH risk"| PP["Post pending proposal to Console<br/>block on wait_for_approval.py"]
+
+    PP --> HA{"Human approves in Console?"}
+    HA -->|"Approve"| AP["Apply patch, run tests"]
+    HA -->|"Reject"| RJ["Terminate — no changes"]
+
+    AA --> CR["Completed report · 32+1F → 33 passed · verified diff"]
+    AP --> CR
+    CR --> IH["Recorded to incident history"]
+
+    style G fill:#1f6b45,color:#fff
+    style V fill:#1f6b45,color:#fff
+    style GR fill:#1f6b45,color:#fff
+    style E fill:#8a5a1a,color:#fff
+    style CR fill:#1f6b45,color:#fff
+    style RJ fill:#7a2020,color:#fff
+    style HA fill:#8a5a1a,color:#fff
 ```
 
+**Three deterministic voters** — `DeterministicScorer` (weighted vocabulary), `SVM` (TF-IDF + LinearSVC), and `kNN` (cosine, k=5, with incident retrieval) — resolve routine tickets. **Granite** (watsonx.ai) is an optional fourth voter consulted only to break ties. Genuinely ambiguous tickets **escalate to IBM Bob 2.0**, which investigates the repository and — for HIGH-risk changes — requires human approval in the Console before applying anything.
+
 Each ticket stops at the earliest rung that can resolve it confidently. The pipeline path is visualised live in the Console tab.
+
+**The core idea:** most tools send every ticket to an expensive agent. TriageGate resolves routine reports cheaply and explainably, then dispatches only the hard cases to an agent — with tests and human control proving the result.
 
 ---
 
@@ -48,10 +52,10 @@ The Bug Investigator classifies every proposed fix before touching any file:
 
 | Risk level | Trigger | Action |
 |------------|---------|--------|
-| **HIGH** | Patch touches `app/payments.py`, `app/sessions.py`, or destructive DB ops | Presents unified diff + justification, explicitly asks human operator for approval; waits for in-session confirmation before applying |
+| **HIGH** | Patch touches `app/payments.py`, `app/sessions.py`, or destructive DB ops | Posts a pending proposal (diff + justification) to the TriageGate Console and blocks on `scripts/wait_for_approval.py`; applies only after the operator approves through the Console's approval endpoint |
 | **LOW** | All other changes (pure logic, read-only paths) | Applied immediately; `auto_applied: true` in report |
 
-HIGH-risk patches are **never applied automatically**. The investigator will not proceed until a human responds in-session with explicit approval (e.g. "yes", "apply", "approved").
+HIGH-risk patches are **never applied automatically**. The investigator posts its proposed fix to the Console and waits on the approval endpoint; it applies the patch only after a human clicks **Approve** in the TriageGate Console. Approval happens in one place — the Console — not in the Bob session.
 
 ---
 
@@ -94,7 +98,7 @@ python -m pytest
 cd demo_repo && python -m pytest
 ```
 
-All 174 tests must pass. The demo-repo suite includes one expected-fail test (`test_idempotency.py`) which documents the seeded bug.
+The full suite is **367 tests**, all passing. The demo-repo suite includes one expected-fail test (`test_idempotency.py`) which documents the seeded bug the Bug Investigator is designed to find and fix.
 
 ---
 
