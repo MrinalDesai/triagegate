@@ -39,54 +39,65 @@ the risk level of the proposed fix:
 - **LOW** for all other changes: pure logic fixes, formatting, read-only paths,
   e.g. `app/orders.py` lookup functions.
 
-## 6. Risk-gated stop: HIGH risk requires human approval before any edit
+## 6. Risk-gated protocol
 
 ### If risk is HIGH
-The investigator **MUST NOT** modify any file yet.  Instead it must:
-
-1. Present the proposed fix as a **unified diff** (the exact text that would be
-   applied, formatted as a standard `diff -u` patch).
-2. State the risk justification: name the sensitive file(s) the patch touches
-   and why that qualifies as HIGH risk.
-3. **Explicitly ask the human operator for approval** to apply the patch, e.g.:
-   > "This patch modifies `app/payments.py` (HIGH risk — payment processing
-   > code). Please confirm: should I apply this patch and run the test suite?"
-4. Wait for the human operator to respond **in this session** with explicit
-   approval (e.g. "yes", "apply", "approved").
-5. Only after receiving that approval: apply the patch and proceed to step 8.
+1. **Diagnose and classify** — identify root cause, confirm HIGH classification.
+2. **Write proposal JSON** with the following fields and post it via
+   `scripts/save_escalation.py`:
+   - `status`: `"pending_approval"`
+   - `risk_level`: `"high"`
+   - `auto_applied`: `false`
+   - `root_cause`, `root_cause_analysis` — diagnosis narrative
+   - `diff` — proposed unified diff (exact text to apply)
+   - `code_before` / `code_after` — the specific lines before and after
+   - `files_examined` — list of files read during investigation
+   - `tests_before` — baseline suite summary
+   - **No** `tests_after`, **No** `verdict` (omit or set to `null`)
+3. **Run the waiter**:
+   ```
+   python scripts/wait_for_approval.py TICKET_ID
+   ```
+   - Exit 0 (approved) → proceed to step 4.
+   - Exit 2 (rejected) → stop; do not apply the patch.
+   - Exit 1 (timeout)  → stop; report timeout to operator.
+4. **Apply the patch** and run the test suite:
+   ```
+   cd demo_repo && python -m pytest
+   ```
+5. **Post completed report** via `scripts/save_escalation.py`:
+   - `status`: `"completed"`
+   - `risk_level`: `"high"`, `auto_applied`: `false`
+   - `tests_after`: suite summary string
+   - `verdict`: one of `"fix_verified"` / `"fix_failed"` / `"needs_human"`
+   - `files_changed`: list of files actually modified by the patch
+   - `impact`: one sentence of business impact derived from the ticket symptom
 
 The EscalationReport must include:
 - `risk_level`: `"high"`
 - `auto_applied`: `false`
-- A one-sentence justification in `patch_summary` stating why HIGH risk was
-  assigned.
 
 ### If risk is LOW
-The investigator may apply the patch immediately without stopping.  Note in the
-report that `auto_applied` is eligible.
-
-The EscalationReport must include:
-- `risk_level`: `"low"`
-- `auto_applied`: `true`
+Apply the patch immediately; post **one** `completed` report with:
+- `status`: `"completed"`
+- `risk_level`: `"low"`, `auto_applied`: `true`
+- `tests_after`, `verdict`, `files_changed`, `impact` — all required
 - A one-sentence justification in `patch_summary` confirming why LOW risk was
   assigned (e.g. *"Risk: LOW — patch only modifies order-lookup logic in
-  app/orders.py, no payment or auth code touched."*)
+  `app/orders.py`, no payment or auth code touched."*)
 
 ## 7. Always run the test suite after patching
-After applying a patch (immediately for LOW risk; after human approval for HIGH
-risk), run:
+After applying a patch (immediately for LOW risk; after approval for HIGH risk),
+run:
 
 ```
 cd demo_repo && python -m pytest
 ```
 
-Capture the full output.  Record the last summary line (e.g. `3 passed, 1
-failed`) as `tests_after` in the EscalationReport.
+Capture the full output.  Record the last summary line as `tests_after`.
 
 ## 8. Report a structured verdict
-Every investigation must end with an `EscalationReport` stored via the API
-endpoint `POST /api/escalations/{ticket_id}/report` or the helper script
-`scripts/save_escalation.py`.
+Every completed investigation must post a `completed` EscalationReport.
 
 The `verdict` field must be one of:
 - `fix_verified` — patch applied and all tests pass
@@ -100,10 +111,11 @@ The `verdict` field must be one of:
 3. Explore demo_repo/ — start with `README.md` then relevant source files.
 4. Identify the root-cause file and line.
 5. Classify fix risk (Rule 5).
-6. **HIGH risk**: present unified diff + justification + ask for human approval;
-   wait for approval before proceeding.
-   **LOW risk**: apply patch immediately.
+6. **HIGH risk**: write + post `pending_approval` proposal; run
+   `scripts/wait_for_approval.py`; wait for exit 0 before applying patch; then
+   post `completed` report.
+   **LOW risk**: apply patch immediately, post ONE `completed` report with
+   `auto_applied=true` and all required completed fields.
 7. Run `cd demo_repo && python -m pytest`; capture the after summary as `tests_after`.
-8. Set verdict and populate all EscalationReport fields (`risk_level`,
-   `auto_applied`, `patch_summary` justification).
-9. Post the report to the API or via the helper script.
+8. Set verdict and populate all EscalationReport fields.
+9. Post the completed report to the API or via the helper script.

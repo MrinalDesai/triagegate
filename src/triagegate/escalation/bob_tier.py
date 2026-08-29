@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---------------------------------------------------------------------------
 # Verdict type
@@ -26,31 +26,95 @@ class EscalationReport(BaseModel):
     patch_summary: str
     diff: str
     tests_before: str  # e.g. "32 passed 1 failed"
-    tests_after: str   # e.g. "33 passed"
-    verdict: Verdict
+    # Optional until completed
+    tests_after: Optional[str] = None
+    verdict: Optional[Verdict] = None
     risk_level: Literal["high", "low"] = "low"
     auto_applied: bool = False
-    # Approval workflow fields
-    status: Literal["pending_approval", "approved", "rejected", "auto_applied"] = "pending_approval"
+    # Status is REQUIRED — no default
+    status: Literal["pending_approval", "approved", "rejected", "completed"]
     root_cause_analysis: str = ""
     code_before: str = ""
     code_after: str = ""
+    # New fields
+    files_changed: List[str] = Field(default_factory=list)
+    impact: Optional[str] = None
+
+    # ------------------------------------------------------------------
+    # Field-level validators
+    # ------------------------------------------------------------------
 
     @field_validator("verdict")
     @classmethod
-    def _valid_verdict(cls, v: str) -> str:
+    def _valid_verdict(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
         allowed = {"fix_verified", "fix_failed", "needs_human"}
         if v not in allowed:
             raise ValueError(f"verdict must be one of {allowed!r}, got {v!r}")
         return v
 
+    # ------------------------------------------------------------------
+    # Cross-field validators per status
+    # ------------------------------------------------------------------
+
     @model_validator(mode="after")
-    def _auto_applied_requires_low_risk(self) -> "EscalationReport":
-        if self.auto_applied and self.risk_level != "low":
-            raise ValueError(
-                "auto_applied may only be True when risk_level is 'low'; "
-                f"got risk_level={self.risk_level!r}"
-            )
+    def _enforce_state_machine(self) -> "EscalationReport":
+        status = self.status
+        risk = self.risk_level
+        auto = self.auto_applied
+        ta = self.tests_after
+        v = self.verdict
+
+        if status in ("pending_approval", "approved", "rejected"):
+            # All three intermediate states require high risk
+            if risk != "high":
+                raise ValueError(
+                    f"status={status!r} requires risk_level='high', got {risk!r}"
+                )
+            if ta is not None:
+                raise ValueError(
+                    f"status={status!r} must not have tests_after set"
+                )
+            if v is not None:
+                raise ValueError(
+                    f"status={status!r} must not have verdict set"
+                )
+            if auto:
+                raise ValueError(
+                    f"status={status!r} requires auto_applied=False"
+                )
+
+        elif status == "completed":
+            # completed requires tests_after and verdict
+            if not ta:
+                raise ValueError(
+                    "status='completed' requires a non-empty tests_after"
+                )
+            if v is None:
+                raise ValueError(
+                    "status='completed' requires verdict to be set"
+                )
+            # risk-specific auto_applied rules
+            if risk == "high" and auto:
+                raise ValueError(
+                    "status='completed' with risk_level='high' requires auto_applied=False"
+                )
+            if risk == "low" and not auto:
+                raise ValueError(
+                    "status='completed' with risk_level='low' requires auto_applied=True"
+                )
+            # fix_verified additionally requires files_changed and impact
+            if v == "fix_verified":
+                if not self.files_changed:
+                    raise ValueError(
+                        "status='completed' with verdict='fix_verified' requires non-empty files_changed"
+                    )
+                if not self.impact:
+                    raise ValueError(
+                        "status='completed' with verdict='fix_verified' requires impact to be set"
+                    )
+
         return self
 
 

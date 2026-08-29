@@ -542,6 +542,7 @@ tr:hover td { background: var(--panel2); }
   border: 1px solid var(--signal-dim);
   border-radius: 20px;
   padding: 3px 10px;
+  white-space: nowrap;
 }
 
 /* ── Verdict badge ─────────────────────────────────────────────────────────── */
@@ -790,13 +791,23 @@ pre .diff-meta { color: var(--mute); }
   line-height: 1.5;
 }
 
-/* Give the similar-incidents table full column width; cap the Impact column */
+/* Give the similar-incidents table explicit column widths for narrow-width resilience */
 #similar-table { table-layout: fixed; width: 100%; }
 #similar-table th,
 #similar-table td { word-break: break-word; }
-/* Impact column (5th): cap at 40% */
+/* Explicit column widths: ID 9% | Title 22% | Domain 11% | Risk 9% | Impact 37% | Verdict 12% */
+#similar-table th:nth-child(1),
+#similar-table td:nth-child(1) { width: 9%; white-space: nowrap; }
+#similar-table th:nth-child(2),
+#similar-table td:nth-child(2) { width: 22%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#similar-table th:nth-child(3),
+#similar-table td:nth-child(3) { width: 11%; }
+#similar-table th:nth-child(4),
+#similar-table td:nth-child(4) { width: 9%; }
 #similar-table th:nth-child(5),
-#similar-table td:nth-child(5) { max-width: 40%; width: 40%; }
+#similar-table td:nth-child(5) { width: 37%; }
+#similar-table th:nth-child(6),
+#similar-table td:nth-child(6) { width: 12%; white-space: nowrap; }
 /* Let rows breathe a little more */
 #similar-table td { padding-top: 12px; padding-bottom: 12px; vertical-align: top; }
 
@@ -809,6 +820,7 @@ pre .diff-meta { color: var(--mute); }
   border: 1px solid #533;
   border-radius: 20px;
   padding: 3px 10px;
+  white-space: nowrap;
 }
 
 .chip-risk-low {
@@ -820,6 +832,7 @@ pre .diff-meta { color: var(--mute); }
   border: 1px solid var(--signal-dim);
   border-radius: 20px;
   padding: 3px 10px;
+  white-space: nowrap;
 }
 
 /* ── Code fix blocks (before / after) ──────────────────────────────────────── */

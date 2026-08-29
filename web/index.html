@@ -463,23 +463,26 @@ function _clearPoll() {
 
 async function _renderReport(r, resolvedBy) {
   const inner = document.getElementById('escalation-inner');
-  const status    = r.status || 'pending_approval';
+  const status    = r.status;
   const riskLevel = (r.risk_level || 'low').toLowerCase();
   const isHighRisk = riskLevel === 'high';
 
-  // For pipeline: treat approved/auto_applied/rejected as settled
-  const isSettled = status === 'approved' || status === 'auto_applied' ||
-                    status === 'rejected';
+  // completed = fully settled; approved = authorized but patch not yet applied
+  const isSettled = status === 'completed' || status === 'rejected';
   buildPipeline(resolvedBy, true, isSettled, r.verdict, riskLevel, status);
 
+  // Only render verdict/tests_after when the report is completed and values are present
+  const hasVerdict   = status === 'completed' && r.verdict != null;
+  const hasTestsAfter = status === 'completed' && r.tests_after != null;
+
   const verdictClass = { fix_verified: 'fix-verified', fix_failed: 'fix-failed', needs_human: 'needs-human' }[r.verdict] || 'needs-human';
-  const verdictLabel = { fix_verified: '✓ FIX VERIFIED', fix_failed: '✗ FIX FAILED', needs_human: '⚠ NEEDS HUMAN' }[r.verdict] || r.verdict;
+  const verdictLabel = { fix_verified: '✓ FIX VERIFIED', fix_failed: '✗ FIX FAILED', needs_human: '⚠ NEEDS HUMAN' }[r.verdict] || (r.verdict || '—');
 
   const riskBadgeClass = isHighRisk ? 'risk-badge risk-high' : 'risk-badge risk-low';
   const riskBadgeLabel = isHighRisk ? 'HIGH RISK' : 'LOW RISK';
   const riskSubLabel = isHighRisk
-    ? (status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : 'human approval required')
-    : (r.auto_applied || status === 'auto_applied' ? 'auto-applied' : 'eligible for auto-apply');
+    ? (status === 'approved' ? 'approved — applying patch…' : status === 'rejected' ? 'rejected' : status === 'completed' ? 'completed' : 'human approval required')
+    : (r.auto_applied ? 'auto-applied' : 'eligible for auto-apply');
 
   // Root cause analysis section
   const rcaHtml = r.root_cause_analysis
@@ -505,35 +508,50 @@ async function _renderReport(r, resolvedBy) {
     </div>`;
   }
 
-  // Approval row (only for high-risk pending_approval)
+  // Approval row — state-machine driven
   let approvalHtml = '';
   if (isHighRisk && status === 'pending_approval') {
+    // Show APPROVE / Reject buttons; keep polling
     approvalHtml = `
     <div class="approval-row" id="approval-row">
       <button class="btn-approve" id="btn-approve">✔ APPROVE</button>
       <button class="btn-reject" id="btn-reject">Reject</button>
     </div>`;
   } else if (status === 'approved') {
+    // Authorized — hide buttons, show banner, keep polling until completed
     approvalHtml = `
     <div class="approval-row">
-      <span class="approval-badge approved">APPROVED ✓</span>
-      <span class="approval-note">Recorded to incident history.</span>
+      <span class="approval-badge approved">AUTHORIZED — investigator applying patch…</span>
     </div>`;
   } else if (status === 'rejected') {
+    // Terminal — STOP polling
     approvalHtml = `
     <div class="approval-row">
       <span class="approval-badge rejected">REJECTED</span>
+      <span class="approval-note" style="color:var(--mute);font-size:11px">No further action will be taken.</span>
     </div>`;
-  } else if (!isHighRisk && (r.auto_applied || status === 'auto_applied')) {
+  } else if (status === 'completed' && !isHighRisk && r.auto_applied) {
     approvalHtml = `
     <div class="approval-row">
       <span class="approval-badge approved">AUTO-APPLIED ✓</span>
+      <span class="approval-note">Recorded to incident history.</span>
+    </div>`;
+  } else if (status === 'completed' && isHighRisk) {
+    approvalHtml = `
+    <div class="approval-row">
+      <span class="approval-badge approved">APPROVED ✓ — patch applied</span>
+      <span class="approval-note">Recorded to incident history.</span>
     </div>`;
   }
 
+  // Test results: only render non-null values when completed
+  const testsAfterHtml = hasTestsAfter
+    ? `<div class="tests-block"><label>After</label><code>${esc(r.tests_after)}</code></div>`
+    : (status === 'completed' ? '' : `<div class="tests-block"><label>After</label><code class="mute">pending…</code></div>`);
+
   inner.innerHTML = `
     <div class="mt-8 verdict-risk-row" style="margin-bottom:16px">
-      <span class="verdict-badge ${verdictClass}">${verdictLabel}</span>
+      ${hasVerdict ? `<span class="verdict-badge ${verdictClass}">${verdictLabel}</span>` : `<span class="verdict-badge needs-human">PENDING…</span>`}
       <span class="${riskBadgeClass}">
         ${riskBadgeLabel}
         <span class="risk-sub">${riskSubLabel}</span>
@@ -559,8 +577,10 @@ async function _renderReport(r, resolvedBy) {
     <div class="card-title">Test Results</div>
     <div class="tests-grid">
       <div class="tests-block"><label>Before</label><code>${esc(r.tests_before)}</code></div>
-      <div class="tests-block"><label>After</label><code>${esc(r.tests_after)}</code></div>
+      ${testsAfterHtml}
     </div>
+
+    ${hasVerdict && status === 'completed' ? `<div class="approval-note" style="margin-top:8px;font-size:11px;color:var(--mute)">This investigation is recorded in incident history.</div>` : ''}
 
     ${approvalHtml}
   `;
@@ -575,7 +595,7 @@ async function _renderReport(r, resolvedBy) {
     if (afterEl)  afterEl.textContent  = r.code_after  || '';
   }
 
-  // Wire up approve/reject buttons
+  // Wire up approve/reject buttons (pending_approval only)
   if (isHighRisk && status === 'pending_approval') {
     const btnApprove = document.getElementById('btn-approve');
     const btnReject  = document.getElementById('btn-reject');
@@ -588,7 +608,9 @@ async function _renderReport(r, resolvedBy) {
         const resp = await fetch(`/api/escalations/${encodeURIComponent(ticketId)}/approve`, { method: 'POST' });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const updated = await resp.json();
+        // approved → keep polling until completed
         await _renderReport(updated, resolvedBy);
+        _scheduleResumePoll(ticketId, resolvedBy);
       } catch (e) {
         btnApprove.disabled = false;
         btnReject.disabled  = false;
@@ -605,6 +627,8 @@ async function _renderReport(r, resolvedBy) {
         const resp = await fetch(`/api/escalations/${encodeURIComponent(ticketId)}/reject`, { method: 'POST' });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const updated = await resp.json();
+        // rejected → terminal, STOP polling
+        _clearPoll();
         await _renderReport(updated, resolvedBy);
       } catch (e) {
         btnApprove.disabled = false;
@@ -615,6 +639,32 @@ async function _renderReport(r, resolvedBy) {
       }
     });
   }
+}
+
+// Resume polling after approve click (approved → completed transition)
+function _scheduleResumePoll(ticketId, resolvedBy) {
+  _clearPoll();
+  const deadline = Date.now() + POLL_MAX_MS;
+
+  async function pollForCompleted() {
+    try {
+      const resp = await fetch(`/api/escalations/${encodeURIComponent(ticketId)}`);
+      if (resp.ok) {
+        const r = await resp.json();
+        if (r.status === 'completed') {
+          _clearPoll();
+          await _renderReport(r, resolvedBy);
+          return;
+        }
+        // Still approved — keep polling
+        if (Date.now() < deadline) {
+          _pollTimer = setTimeout(pollForCompleted, POLL_INTERVAL_MS);
+        }
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  _pollTimer = setTimeout(pollForCompleted, POLL_INTERVAL_MS);
 }
 
 async function loadEscalation(ticketId, resolvedBy) {
@@ -629,10 +679,17 @@ async function loadEscalation(ticketId, resolvedBy) {
     try {
       const resp = await fetch(`/api/escalations/${encodeURIComponent(ticketId)}`);
       if (resp.ok) {
-        // Report exists — stop polling and render regardless of status
-        _clearPoll();
         const r = await resp.json();
         await _renderReport(r, resolvedBy);
+        // Stop polling on terminal states; keep polling for pending_approval and approved
+        if (r.status === 'completed' || r.status === 'rejected') {
+          _clearPoll();
+          return;
+        }
+        // pending_approval or approved: keep polling
+        if (Date.now() < deadline) {
+          _pollTimer = setTimeout(attempt, POLL_INTERVAL_MS);
+        }
         return;
       }
       if (resp.status !== 404) {

@@ -4,7 +4,7 @@ import csv
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Set
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
@@ -44,6 +44,10 @@ _rung_counts: Dict[str, int] = defaultdict(int)
 
 # Escalation store (single shared instance, default data/escalations/).
 _escalation_store = EscalationStore()
+
+# In-memory set of ticket_ids that have already been written to incident history.
+# Prevents duplicate rows on concurrent or replayed requests.
+_incident_history_written: Set[str] = set()
 
 
 def _make_llm_client():
@@ -131,13 +135,85 @@ def stats() -> Dict[str, int]:
 
 @app.post("/api/escalations/{ticket_id}/report", response_model=EscalationReport, status_code=201)
 def save_escalation_report(ticket_id: str, report: EscalationReport) -> EscalationReport:
-    """Store an EscalationReport produced by the Bug Investigator mode."""
+    """Store an EscalationReport produced by the Bug Investigator mode.
+
+    Enforces the state-machine transition matrix:
+      [no report] → pending_approval  (HIGH risk, status must be pending_approval)
+      [no report] → completed         (LOW risk, auto_applied=True)
+      approved    → completed         (HIGH risk completing after approval)
+      Everything else → 409
+    Client-submitted approved/rejected are rejected (those come only via their
+    dedicated endpoints).
+    """
     if report.ticket_id != ticket_id:
         raise HTTPException(
             status_code=422,
             detail=f"ticket_id in URL ({ticket_id!r}) does not match body ({report.ticket_id!r})",
         )
+
+    # Block client-submitted approved/rejected — dedicated endpoints only
+    if report.status in ("approved", "rejected"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"status={report.status!r} can only be set via /approve or /reject endpoints",
+        )
+
+    existing = _escalation_store.load(ticket_id)
+
+    if existing is None:
+        # Fresh submission: only pending_approval (high) or completed (low) allowed
+        if report.status == "pending_approval":
+            # Risk must be high (model validator already enforces this, but belt+braces)
+            if report.risk_level != "high":
+                raise HTTPException(
+                    status_code=409,
+                    detail="pending_approval status requires risk_level='high'",
+                )
+        elif report.status == "completed":
+            if report.risk_level != "low" or not report.auto_applied:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Fresh completed report requires risk_level='low' and auto_applied=True",
+                )
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot create a fresh report with status={report.status!r}",
+            )
+    else:
+        # Existing report: the only allowed transition is approved → completed (high risk)
+        if existing.status == "completed":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ticket {ticket_id!r} is already completed; no further transitions allowed",
+            )
+        if existing.status == "rejected":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ticket {ticket_id!r} was rejected; no further transitions allowed",
+            )
+        if existing.status == "approved" and report.status == "completed":
+            if report.risk_level != "high":
+                raise HTTPException(
+                    status_code=409,
+                    detail="Completing an approved HIGH-risk ticket requires risk_level='high'",
+                )
+            # Valid transition — fall through to save
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Invalid transition: stored status={existing.status!r} → "
+                    f"requested status={report.status!r}"
+                ),
+            )
+
     _escalation_store.save(report)
+
+    # Append incident history only for completed fix_verified, exactly once per ticket
+    if report.status == "completed" and report.verdict == "fix_verified":
+        _append_incident_history(report)
+
     return report
 
 
@@ -152,7 +228,10 @@ def get_escalation_report(ticket_id: str) -> EscalationReport:
 
 @app.post("/api/escalations/{ticket_id}/approve", response_model=EscalationReport)
 def approve_escalation(ticket_id: str) -> EscalationReport:
-    """Approve a pending escalation report; append incident to history CSV."""
+    """Approve a pending_approval escalation: pending_approval → approved.
+
+    Only mutates the status field.  Does NOT write incident history.
+    """
     report = _escalation_store.load(ticket_id)
     if report is None:
         raise HTTPException(status_code=404, detail=f"No escalation report for ticket {ticket_id!r}")
@@ -163,24 +242,12 @@ def approve_escalation(ticket_id: str) -> EscalationReport:
         )
     report = report.model_copy(update={"status": "approved"})
     _escalation_store.save(report)
-
-    # Append to incident history CSV
-    _append_incident_history(report)
-
-    # Reload the resolver's history so future tickets see this incident
-    if _resolver is not None:
-        from triagegate.pipeline.resolver import _DEFAULT_HISTORY_CSV
-        history_path = Path(_INCIDENT_HISTORY_CSV)
-        if history_path.exists():
-            from triagegate.pipeline.resolver import Resolver as _R
-            _resolver._history = _R._load_history(history_path)
-
     return report
 
 
 @app.post("/api/escalations/{ticket_id}/reject", response_model=EscalationReport)
 def reject_escalation(ticket_id: str) -> EscalationReport:
-    """Reject a pending escalation report."""
+    """Reject a pending_approval escalation: pending_approval → rejected (TERMINAL)."""
     report = _escalation_store.load(ticket_id)
     if report is None:
         raise HTTPException(status_code=404, detail=f"No escalation report for ticket {ticket_id!r}")
@@ -195,29 +262,39 @@ def reject_escalation(ticket_id: str) -> EscalationReport:
 
 
 def _append_incident_history(report: EscalationReport) -> None:
-    """Append one row to data/incident_history.csv for an approved report."""
-    _INCIDENT_HISTORY_CSV.parent.mkdir(parents=True, exist_ok=True)
-    file_exists = _INCIDENT_HISTORY_CSV.exists()
-    fieldnames = ["id", "title", "domain", "risk_level", "impact", "verdict"]
-    # title: use ticket_id as fallback; domain: from report if present else "escalated"
-    title = report.ticket_id
-    domain = "escalated"
-    # impact: first non-empty line of root_cause_analysis, else root_cause
-    rca = report.root_cause_analysis.strip()
-    if rca:
-        impact = rca.splitlines()[0].strip()
-    else:
-        impact = report.root_cause.splitlines()[0].strip()
+    """Append one row to data/incident_history.csv for a completed fix_verified report.
+
+    Uses EXACTLY the column schema generate_tickets.py writes:
+      id, files_changed, risk_level, impact, tests_after, verdict
+
+    files_changed is serialised as ", ".join(report.files_changed).
+    Duplicate guard: each ticket_id is written at most once per process lifetime.
+    """
+    ticket_id = report.ticket_id
+    if ticket_id in _incident_history_written:
+        return
+
+    csv_path = _INCIDENT_HISTORY_CSV
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    file_exists = csv_path.exists()
+    fieldnames = ["id", "files_changed", "risk_level", "impact", "tests_after", "verdict"]
+
+    files_changed_str = ", ".join(report.files_changed)
+    impact_str = report.impact or ""
+
     row = {
-        "id": report.ticket_id,
-        "title": title,
-        "domain": domain,
+        "id": ticket_id,
+        "files_changed": files_changed_str,
         "risk_level": report.risk_level,
-        "impact": impact,
+        "impact": impact_str,
+        "tests_after": report.tests_after or "",
         "verdict": report.verdict,
     }
-    with open(_INCIDENT_HISTORY_CSV, "a", newline="", encoding="utf-8") as f:
+
+    with open(csv_path, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         if not file_exists:
             writer.writeheader()
         writer.writerow(row)
+
+    _incident_history_written.add(ticket_id)
