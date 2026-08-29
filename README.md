@@ -16,14 +16,14 @@ Ticket
        │ < 0.55
        ▼
 ┌──────────────┐
-│    Voters    │  Four voters (SVM, KNN, keyword, ensemble)
-│              │  Agreement ≥ 0.55 → route
+│    Voters    │  Three voters: SVM, kNN, deterministic scorer
+│              │  ≥ 2 matching votes + scorer evidence → route
 └──────┬───────┘
        │ no agreement
        ▼
 ┌──────────────┐
-│   Granite    │  WatsonX / Granite tiebreak (requires credentials;
-│  tiebreak    │  node rendered as never-reached when not configured)
+│   Granite    │  Optional fourth voter — consulted only when voters
+│  tiebreak    │  disagree (requires credentials; skipped when offline)
 └──────┬───────┘
        │ still uncertain
        ▼
@@ -64,6 +64,8 @@ pip install -r requirements.txt
 # Train the SVM and KNN classifiers
 python scripts/train.py
 
+# If scikit-learn version changes, re-run scripts/train.py to regenerate the saved model.
+
 # Start the server
 uvicorn triagegate.web.server:app --app-dir src
 ```
@@ -98,7 +100,7 @@ All 174 tests must pass. The demo-repo suite includes one expected-fail test (`t
 
 ## Data Provenance
 
-The training corpus is **synthetic**: tickets were generated from domain-labelled templates covering billing, technical, account, and general categories. The adversarial set (`data/adversarial/`) consists of seven tickets written by hand to probe edge cases — ambiguous phrasing, mixed-domain signals, and deliberately misleading keywords.
+The training corpus is **synthetic**: tickets were generated from domain-labelled templates covering five domains: `api`, `database`, `frontend`, `auth`, and `build`. The adversarial set (`data/ambiguous_tickets.csv`) consists of seven tickets written by hand to probe edge cases — ambiguous phrasing, mixed-domain signals, and deliberately misleading keywords.
 
 No real customer data was used at any stage.
 
@@ -111,7 +113,7 @@ No real customer data was used at any stage.
 | SVM gate resolution | **84%** | Tickets resolved at first rung (confidence ≥ 0.55) |
 | Voter agreement resolution | **16%** | Resolved at second rung after gate pass-through |
 | Synthetic in-distribution eval | **100%** (50/50) | Held-out synthetic tickets, all correctly routed |
-| Adversarial escalations | **2 / 7** | 2 of 7 hand-written adversarial tickets escalated as expected |
+| Adversarial escalations | **2 / 7** | 2 of 7 hand-written adversarial tickets reached escalation |
 | Known confident misroute | **A-0004** | One ticket is routed with high confidence to the wrong domain; documented as a known limitation |
 
 These numbers reflect a 50-ticket synthetic evaluation and a 7-ticket adversarial set. They are not representative of production traffic distributions.
