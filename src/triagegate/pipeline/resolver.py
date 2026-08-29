@@ -5,25 +5,33 @@ from __future__ import annotations
 import time
 from collections import Counter
 from pathlib import Path
+from typing import Optional
 
 from triagegate.classifier.knn import KnnClassifier
 from triagegate.classifier.scorer import DeterministicScorer
 from triagegate.classifier.svm import SvmClassifier
+from triagegate.llm.client import LLMClient
 from triagegate.models.ticket import LadderResult, Ticket, VoterResult
 
 _DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 _DEFAULT_SVM_PATH = _DATA_DIR / "svm_model.joblib"
 _DEFAULT_KNN_CSV = _DATA_DIR / "tickets.csv"
 
+_GRANITE_CONFIDENCE_THRESHOLD = 0.6
+
 
 class Resolver:
     """Three-rung decision ladder for ticket triage.
 
     Rungs (tried in order):
-    1. ``svm_gate``       — SVM confidence >= *svm_threshold* → resolve immediately.
-    2. ``voter_agreement`` — majority vote across all three classifiers AND scorer
-                             produced nonzero evidence.
-    3. ``escalate``       — fallback when the above rungs fail.
+    1. ``svm_gate``         — SVM confidence >= *svm_threshold* → resolve immediately.
+    2. ``voter_agreement``  — majority vote across all three classifiers AND scorer
+                              produced nonzero evidence.
+    2.5 ``granite_tiebreak``— optional LLM tie-break: only when voters disagree AND
+                              an :class:`~triagegate.llm.client.LLMClient` is configured;
+                              resolves when Granite picks a domain with confidence >= 0.6
+                              that also matches at least one existing voter's prediction.
+    3. ``escalate``         — fallback when the above rungs fail.
 
     Parameters
     ----------
@@ -35,6 +43,9 @@ class Resolver:
         Path to the pre-trained SVM joblib file.  Defaults to ``data/svm_model.joblib``.
     knn_csv_path:
         Path to the CSV used to train the kNN at startup.  Defaults to ``data/tickets.csv``.
+    llm_client:
+        Optional :class:`~triagegate.llm.client.LLMClient` implementation used as a
+        tie-break voter (rung 2.5).  When *None* the resolver is fully offline-safe.
     """
 
     def __init__(
@@ -44,9 +55,11 @@ class Resolver:
         agreement_min_voters: int = 2,
         svm_model_path: str | Path | None = None,
         knn_csv_path: str | Path | None = None,
+        llm_client: Optional[LLMClient] = None,
     ) -> None:
         self.svm_threshold = svm_threshold
         self.agreement_min_voters = agreement_min_voters
+        self._llm_client = llm_client
 
         # --- Scorer (no training needed) ---
         self._scorer = DeterministicScorer()
@@ -109,10 +122,13 @@ class Resolver:
                 domain = majority_domain
             else:
                 # ----------------------------------------------------------------
-                # RUNG 3 — escalate
+                # RUNG 2.5 — granite_tiebreak (optional)
                 # ----------------------------------------------------------------
-                resolved_by = "escalate"
-                domain = "escalated"
+                resolved_by, domain = self._try_granite_tiebreak(
+                    title, description,
+                    voter_domains={svm_domain, knn_domain, scorer_domain},
+                    voters=voters,
+                )
 
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
@@ -126,3 +142,54 @@ class Resolver:
             evidence=evidence,
             elapsed_ms=round(elapsed_ms, 3),
         )
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _try_granite_tiebreak(
+        self,
+        title: str,
+        description: str,
+        voter_domains: set[str],
+        voters: list[VoterResult],
+    ) -> tuple[str, str]:
+        """Attempt rung-2.5 resolution; return ``(resolved_by, domain)``."""
+        if self._llm_client is None:
+            return "escalate", "escalated"
+
+        from triagegate.classifier.scorer import DOMAINS  # avoid circular at module level
+
+        result = self._llm_client.classify(title, description, DOMAINS)
+
+        if (
+            result is not None
+            and result[1] >= _GRANITE_CONFIDENCE_THRESHOLD
+            and result[0] in voter_domains
+        ):
+            granite_domain, granite_conf = result
+            voters.append(
+                VoterResult(
+                    voter="granite",
+                    domain=granite_domain,
+                    confidence=round(granite_conf, 4),
+                )
+            )
+            return "granite_tiebreak", granite_domain
+
+        # Record the granite attempt even when it doesn't resolve (if called)
+        if result is not None:
+            voters.append(
+                VoterResult(
+                    voter="granite",
+                    domain=result[0],
+                    confidence=round(result[1], 4),
+                )
+            )
+        else:
+            # None response — still record a granite entry so callers can see it was tried
+            voters.append(
+                VoterResult(voter="granite", domain="unknown", confidence=0.0)
+            )
+
+        return "escalate", "escalated"

@@ -231,6 +231,6 @@ class TestStatsEndpoint:
         client.post("/api/route", json=payload)
 
         data = client.get("/api/stats").json()
-        valid_rungs = {"svm_gate", "voter_agreement", "escalate"}
+        valid_rungs = {"svm_gate", "voter_agreement", "escalate", "granite_tiebreak"}
         for key in data:
             assert key in valid_rungs, f"Unexpected rung key: '{key}'"

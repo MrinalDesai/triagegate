@@ -42,7 +42,7 @@ class LadderResult(BaseModel):
 
     # Decision
     domain: str
-    resolved_by: str  # "svm_gate" | "voter_agreement" | "escalate"
+    resolved_by: str  # "svm_gate" | "voter_agreement" | "granite_tiebreak" | "escalate"
 
     # Per-voter breakdown
     voters: List[VoterResult]
