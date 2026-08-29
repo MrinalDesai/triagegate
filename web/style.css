@@ -144,7 +144,9 @@ nav a.active {
 /* ── Main content ──────────────────────────────────────────────────────────── */
 main {
   padding: 24px 28px;
-  max-width: 1000px;
+  max-width: 1500px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* ── Eyebrow label ─────────────────────────────────────────────────────────── */
@@ -221,22 +223,24 @@ button[type="submit"] {
 button[type="submit"]:hover { color: #040; }
 button[type="submit"]:disabled { opacity: .4; cursor: not-allowed; }
 
-/* ── Result layout: two columns (main-left + pipeline sticky-right) ─────── */
+/* ── Result layout: two-column grid (left ~1fr, right ~1.2fr) ───────────── */
 .result-layout {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
   gap: 24px;
   align-items: flex-start;
 }
-.result-main  { flex: 1; min-width: 0; }
+.result-main  { min-width: 0; }
 .result-aside {
-  width: 260px;
-  flex: none;
+  min-width: 0;
   position: sticky;
   top: 18px;
 }
-@media (max-width: 860px) {
-  .result-layout  { flex-direction: column; }
-  .result-aside   { width: 100%; position: static; }
+@media (max-width: 1000px) {
+  .result-layout {
+    grid-template-columns: 1fr;
+  }
+  .result-aside { position: static; }
 }
 
 /* ── Pipeline path card ────────────────────────────────────────────────────── */
@@ -577,7 +581,7 @@ pre {
   font-family: var(--mono);
   font-size: 11.5px;
   line-height: 1.5;
-  white-space: pre-wrap;
+  white-space: pre;
   color: var(--mute);
   max-height: 60vh;
 }
@@ -785,6 +789,16 @@ pre .diff-meta { color: var(--mute); }
   margin-bottom: 14px;
   line-height: 1.5;
 }
+
+/* Give the similar-incidents table full column width; cap the Impact column */
+#similar-table { table-layout: fixed; width: 100%; }
+#similar-table th,
+#similar-table td { word-break: break-word; }
+/* Impact column (5th): cap at 40% */
+#similar-table th:nth-child(5),
+#similar-table td:nth-child(5) { max-width: 40%; width: 40%; }
+/* Let rows breathe a little more */
+#similar-table td { padding-top: 12px; padding-bottom: 12px; vertical-align: top; }
 
 .chip-risk-high {
   font-family: var(--mono);

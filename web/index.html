@@ -98,23 +98,23 @@
           </table>
         </div>
 
-        <!-- Bob Escalation panel (only when domain === "escalated") -->
-        <div class="card hidden" id="escalation-card">
-          <div class="card-title">Bob Investigator Report</div>
-          <div id="escalation-inner">
-            <span class="spinner"></span> Escalated — awaiting Bug Investigator. This panel updates automatically when the investigation report is filed.
-          </div>
-        </div>
-
       </div><!-- /result-main -->
 
-      <!-- Right column: Pipeline path card (sticky) -->
+      <!-- Right column: Pipeline path card + escalation report (sticky) -->
       <div class="result-aside">
         <div class="pipeline-card" id="pipeline-card">
           <div class="pipeline-title">Pipeline path</div>
           <div class="pipeline-hint">Lights up the exact route this ticket took.</div>
           <div class="pipeline-spine" id="pipeline-spine">
             <!-- Populated by buildPipeline() -->
+          </div>
+        </div>
+
+        <!-- Bob Escalation panel (only when domain === "escalated") -->
+        <div class="card hidden" id="escalation-card">
+          <div class="card-title">Bob Investigator Report</div>
+          <div id="escalation-inner">
+            <span class="spinner"></span> Escalated — awaiting Bug Investigator. This panel updates automatically when the investigation report is filed.
           </div>
         </div>
       </div><!-- /result-aside -->
