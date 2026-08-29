@@ -1,4 +1,5 @@
 {
   "svm_accuracy": 1.0,
-  "knn_accuracy": 0.96
+  "knn_accuracy": 0.96,
+  "risk_accuracy": 0.81
 }

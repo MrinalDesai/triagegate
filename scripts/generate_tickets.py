@@ -2,8 +2,26 @@
 Generate synthetic labeled bug-report tickets for training and evaluation.
 
 Outputs:
-    data/tickets.csv      – 200 tickets, 40 per domain, seed=42
-    data/eval_tickets.csv –  50 tickets, 10 per domain, seed=99
+    data/tickets.csv          – 200 tickets, 40 per domain, seed=42
+    data/eval_tickets.csv     –  50 tickets, 10 per domain, seed=99
+    data/incident_history.csv – resolution records for ALL tickets (same ids)
+
+Incident history schema
+-----------------------
+id            : matches tickets.csv / eval_tickets.csv
+files_changed : 1-2 plausible file paths derived from the domain
+risk_level    : "high" when files_changed touches a payment/auth/session-like
+                path, "low" otherwise.
+
+                Risk mapping (explicit):
+                  HIGH paths contain any of the keywords:
+                    payment, auth, session, login, checkout, billing
+                  LOW  paths contain only neutral keywords (e.g. orders, db,
+                    views, components, routes, pipeline)
+
+impact        : one generated sentence describing the production impact
+tests_after   : always "all passed"
+verdict       : always "fix_verified"
 
 Usage:
     python scripts/generate_tickets.py
@@ -458,6 +476,156 @@ def _fill(template: str, slots: dict[str, list[str]], rng: random.Random) -> str
 
 
 # ---------------------------------------------------------------------------
+# Incident history generation
+# ---------------------------------------------------------------------------
+
+# File-path candidates per domain.
+# Each entry is a tuple: (file_path, is_high_risk).
+#
+# Risk mapping (authoritative):
+#   HIGH risk paths contain any of the following substrings:
+#       payment, auth, session, login, checkout, billing
+#   LOW  risk paths do NOT contain any of those substrings.
+#
+# This mapping is applied verbatim in generate_incident_history() below.
+
+_HIGH_RISK_KEYWORDS = {"payment", "auth", "session", "login", "checkout", "billing"}
+
+_DOMAIN_FILE_CANDIDATES: dict[str, list[tuple[str, str]]] = {
+    # (file_path, risk_label)
+    "api": [
+        ("app/orders.py",    "low"),
+        ("app/payments.py",  "high"),   # payment → high
+        ("app/invoices.py",  "low"),
+        ("app/webhooks.py",  "low"),
+        ("app/routes.py",    "low"),
+        ("app/checkout.py",  "high"),   # checkout → high
+    ],
+    "database": [
+        ("app/db.py",         "low"),
+        ("app/models.py",     "low"),
+        ("app/migrations.py", "low"),
+        ("app/billing.py",    "high"),  # billing → high
+        ("app/queries.py",    "low"),
+    ],
+    "frontend": [
+        ("app/views/login.py",    "high"),  # login → high
+        ("app/views/checkout.py", "high"),  # checkout → high
+        ("app/views/orders.py",   "low"),
+        ("app/components.py",     "low"),
+        ("app/ui/dashboard.py",   "low"),
+    ],
+    "auth": [
+        ("app/sessions.py",     "high"),  # session → high
+        ("app/auth.py",         "high"),  # auth → high
+        ("app/login.py",        "high"),  # login → high
+        ("app/auth_tokens.py",  "high"),  # auth → high
+        ("app/permissions.py",  "low"),
+    ],
+    "build": [
+        ("ci/pipeline.py",     "low"),
+        ("ci/docker.py",       "low"),
+        ("ci/deploy.py",       "low"),
+        ("scripts/build.py",   "low"),
+        ("scripts/release.py", "low"),
+    ],
+}
+
+# Impact sentence templates per domain.
+_IMPACT_TEMPLATES: dict[str, list[str]] = {
+    "api": [
+        "API errors caused {n} downstream requests to fail per hour.",
+        "{n} customers received empty responses from the {svc} endpoint.",
+        "Rate-limit bypass allowed {n} uncapped requests per minute.",
+        "Stale API responses served to {n} active sessions.",
+    ],
+    "database": [
+        "Duplicate charges recorded for {n} customers due to missing constraint.",
+        "Query timeouts blocked {n} database write operations per minute.",
+        "Replication lag caused stale reads affecting {n} concurrent users.",
+        "Missing index caused {n} sequential scans per hour in production.",
+    ],
+    "frontend": [
+        "Broken UI prevented {n} users from completing checkout.",
+        "Blank screen on {browser} locked out {n} mobile users.",
+        "Double-submission bug created {n} duplicate orders.",
+        "Accessibility regression blocked keyboard navigation for {n} users.",
+    ],
+    "auth": [
+        "Session invalidation logged out {n} active users unexpectedly.",
+        "Auth bypass exposed admin panel to {n} non-privileged accounts.",
+        "Stale sessions persisted on mobile for {n} users after logout.",
+        "Token rotation bug caused {n} failed refresh attempts per hour.",
+    ],
+    "build": [
+        "Failed CI pipeline blocked {n} pull requests from merging.",
+        "Broken artifact prevented {n} deployments to production.",
+        "OOM in test runner caused {n} flaky test suite runs.",
+        "Mis-ordered pipeline stages skipped tests on {n} branches.",
+    ],
+}
+
+
+def _compute_risk(files: list[str]) -> str:
+    """Return 'high' if any file path contains a high-risk keyword, else 'low'.
+
+    High-risk keywords: payment, auth, session, login, checkout, billing.
+    This function is the single authoritative implementation of the risk
+    mapping described in the module docstring.
+    """
+    for path in files:
+        path_lower = path.lower()
+        for keyword in _HIGH_RISK_KEYWORDS:
+            if keyword in path_lower:
+                return "high"
+    return "low"
+
+
+def _generate_incident_row(
+    ticket_id: str,
+    domain: str,
+    rng: random.Random,
+) -> dict:
+    """Generate a single incident-history record for *ticket_id*."""
+    candidates = _DOMAIN_FILE_CANDIDATES[domain]
+
+    # Pick 1-2 distinct file paths, weighted so we occasionally get 2.
+    n_files = rng.choice([1, 1, 2])  # ~33 % chance of 2 files
+    chosen = rng.sample(candidates, min(n_files, len(candidates)))
+    files = [c[0] for c in chosen]
+    files_changed = ", ".join(files)
+
+    risk_level = _compute_risk(files)
+
+    # Generate impact sentence.
+    impact_tpl = rng.choice(_IMPACT_TEMPLATES[domain])
+    n = rng.randint(10, 5000)
+    # frontend templates use {browser}; fill it if needed.
+    impact = impact_tpl.format(n=n, svc=rng.choice(SERVICES), browser=rng.choice(BROWSERS))
+
+    return {
+        "id": ticket_id,
+        "files_changed": files_changed,
+        "risk_level": risk_level,
+        "impact": impact,
+        "tests_after": "all passed",
+        "verdict": "fix_verified",
+    }
+
+
+def generate_incident_history(ticket_rows: list[dict], seed: int) -> list[dict]:
+    """Generate a parallel incident-history record for each row in *ticket_rows*.
+
+    The RNG is seeded with *seed* so the output is fully deterministic.
+    """
+    rng = random.Random(seed)
+    history: list[dict] = []
+    for row in ticket_rows:
+        history.append(_generate_incident_row(row["id"], row["domain"], rng))
+    return history
+
+
+# ---------------------------------------------------------------------------
 # Generator
 # ---------------------------------------------------------------------------
 
@@ -509,6 +677,16 @@ def write_csv(rows: list[dict], path: Path) -> None:
         writer.writerows(rows)
 
 
+def write_incident_history_csv(rows: list[dict], path: Path) -> None:
+    """Write incident-history rows to *path* as CSV."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = ["id", "files_changed", "risk_level", "impact", "tests_after", "verdict"]
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -523,3 +701,9 @@ if __name__ == "__main__":
     eval_rows = generate(n_per_domain=10, seed=99)
     write_csv(eval_rows, root / "data" / "eval_tickets.csv")
     print(f"Wrote {len(eval_rows)} rows to data/eval_tickets.csv")
+
+    # Combine both sets and generate incident history (deterministic, seed=7).
+    all_rows = train_rows + eval_rows
+    history_rows = generate_incident_history(all_rows, seed=7)
+    write_incident_history_csv(history_rows, root / "data" / "incident_history.csv")
+    print(f"Wrote {len(history_rows)} rows to data/incident_history.csv")

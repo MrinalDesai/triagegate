@@ -16,6 +16,7 @@ from collections import Counter
 class NeighborEntry(NamedTuple):
     title: str
     domain: str
+    ticket_id: str = ""
 
 
 class KnnClassifier:
@@ -23,7 +24,7 @@ class KnnClassifier:
 
     * ``predict``  – majority-vote domain among 5 nearest neighbours.
     * ``confidence`` – fraction of the 5 votes belonging to the winner (e.g. 4/5 → 0.8).
-    * ``neighbors`` – returns the 5 nearest ticket titles with their domains.
+    * ``neighbors`` – returns the 5 nearest ticket titles with their domains and ids.
     """
 
     K = 5
@@ -33,6 +34,7 @@ class KnnClassifier:
         self._knn: NearestNeighbors | None = None
         self._train_titles: list[str] = []
         self._train_labels: list[str] = []
+        self._train_ids: list[str] = []
         self._X_train: np.ndarray | None = None  # sparse or dense TF-IDF matrix
 
     # ------------------------------------------------------------------
@@ -45,6 +47,7 @@ class KnnClassifier:
         texts = (df["title"] + " " + df["description"]).tolist()
         self._train_titles = df["title"].tolist()
         self._train_labels = df["domain"].tolist()
+        self._train_ids = df["id"].tolist() if "id" in df.columns else [""] * len(df)
 
         self._vectorizer = TfidfVectorizer(
             ngram_range=(1, 2),
@@ -91,9 +94,13 @@ class KnnClassifier:
         return winner_count / self.K
 
     def neighbors(self, title: str, description: str) -> list[NeighborEntry]:
-        """Return the 5 nearest ticket titles with their domains."""
+        """Return the 5 nearest ticket titles with their domains and ids."""
         indices = self._query(title, description)
         return [
-            NeighborEntry(title=self._train_titles[i], domain=self._train_labels[i])
+            NeighborEntry(
+                title=self._train_titles[i],
+                domain=self._train_labels[i],
+                ticket_id=self._train_ids[i] if i < len(self._train_ids) else "",
+            )
             for i in indices
         ]

@@ -32,6 +32,17 @@ class VoterResult(BaseModel):
     confidence: float
 
 
+class IncidentSummary(BaseModel):
+    """A condensed incident-history record attached to a LadderResult."""
+
+    id: str
+    title: str
+    domain: str
+    risk_level: str
+    impact: str
+    verdict: str
+
+
 class LadderResult(BaseModel):
     """Full result returned by the resolver ladder."""
 
@@ -52,3 +63,10 @@ class LadderResult(BaseModel):
 
     # Timing
     elapsed_ms: float
+
+    # Risk prediction (populated by Resolver when risk model is available)
+    predicted_risk: Optional[str] = None
+    predicted_risk_confidence: Optional[float] = None
+
+    # Similar incidents from incident history (max 5, populated by Resolver)
+    similar_incidents: List[IncidentSummary] = []

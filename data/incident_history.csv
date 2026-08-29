@@ -1,0 +1,251 @@
+id,files_changed,risk_level,impact,tests_after,verdict
+T-0001,app/payments.py,high,Stale API responses served to 405 active sessions.,all passed,fix_verified
+T-0002,app/routes.py,low,API errors caused 4166 downstream requests to fail per hour.,all passed,fix_verified
+T-0003,app/webhooks.py,low,Stale API responses served to 582 active sessions.,all passed,fix_verified
+T-0004,"app/webhooks.py, app/orders.py",low,API errors caused 1838 downstream requests to fail per hour.,all passed,fix_verified
+T-0005,"app/routes.py, app/webhooks.py",low,API errors caused 1821 downstream requests to fail per hour.,all passed,fix_verified
+T-0006,app/webhooks.py,low,4439 customers received empty responses from the order-service endpoint.,all passed,fix_verified
+T-0007,"app/checkout.py, app/payments.py",high,API errors caused 4774 downstream requests to fail per hour.,all passed,fix_verified
+T-0008,app/orders.py,low,API errors caused 4633 downstream requests to fail per hour.,all passed,fix_verified
+T-0009,app/checkout.py,high,Stale API responses served to 2583 active sessions.,all passed,fix_verified
+T-0010,app/invoices.py,low,1482 customers received empty responses from the auth-service endpoint.,all passed,fix_verified
+T-0011,"app/invoices.py, app/routes.py",low,Stale API responses served to 2823 active sessions.,all passed,fix_verified
+T-0012,"app/orders.py, app/checkout.py",high,Stale API responses served to 1361 active sessions.,all passed,fix_verified
+T-0013,app/webhooks.py,low,API errors caused 645 downstream requests to fail per hour.,all passed,fix_verified
+T-0014,app/checkout.py,high,Rate-limit bypass allowed 4879 uncapped requests per minute.,all passed,fix_verified
+T-0015,app/orders.py,low,Rate-limit bypass allowed 3893 uncapped requests per minute.,all passed,fix_verified
+T-0016,"app/checkout.py, app/invoices.py",high,Stale API responses served to 2341 active sessions.,all passed,fix_verified
+T-0017,app/webhooks.py,low,Rate-limit bypass allowed 1386 uncapped requests per minute.,all passed,fix_verified
+T-0018,app/orders.py,low,2364 customers received empty responses from the payment-service endpoint.,all passed,fix_verified
+T-0019,app/webhooks.py,low,Stale API responses served to 670 active sessions.,all passed,fix_verified
+T-0020,app/routes.py,low,Rate-limit bypass allowed 1131 uncapped requests per minute.,all passed,fix_verified
+T-0021,"app/webhooks.py, app/invoices.py",low,Stale API responses served to 1900 active sessions.,all passed,fix_verified
+T-0022,app/payments.py,high,1921 customers received empty responses from the user-service endpoint.,all passed,fix_verified
+T-0023,"app/payments.py, app/invoices.py",high,Rate-limit bypass allowed 43 uncapped requests per minute.,all passed,fix_verified
+T-0024,"app/invoices.py, app/routes.py",low,Rate-limit bypass allowed 1038 uncapped requests per minute.,all passed,fix_verified
+T-0025,app/checkout.py,high,Stale API responses served to 3270 active sessions.,all passed,fix_verified
+T-0026,app/webhooks.py,low,Stale API responses served to 519 active sessions.,all passed,fix_verified
+T-0027,app/webhooks.py,low,910 customers received empty responses from the inventory-service endpoint.,all passed,fix_verified
+T-0028,app/orders.py,low,4405 customers received empty responses from the order-service endpoint.,all passed,fix_verified
+T-0029,"app/orders.py, app/checkout.py",high,3092 customers received empty responses from the payment-service endpoint.,all passed,fix_verified
+T-0030,app/routes.py,low,Rate-limit bypass allowed 3894 uncapped requests per minute.,all passed,fix_verified
+T-0031,app/webhooks.py,low,Stale API responses served to 3973 active sessions.,all passed,fix_verified
+T-0032,app/orders.py,low,Rate-limit bypass allowed 2178 uncapped requests per minute.,all passed,fix_verified
+T-0033,"app/orders.py, app/payments.py",high,Rate-limit bypass allowed 1210 uncapped requests per minute.,all passed,fix_verified
+T-0034,"app/invoices.py, app/orders.py",low,Rate-limit bypass allowed 4256 uncapped requests per minute.,all passed,fix_verified
+T-0035,app/payments.py,high,Rate-limit bypass allowed 1837 uncapped requests per minute.,all passed,fix_verified
+T-0036,app/webhooks.py,low,1647 customers received empty responses from the reporting-service endpoint.,all passed,fix_verified
+T-0037,app/checkout.py,high,API errors caused 238 downstream requests to fail per hour.,all passed,fix_verified
+T-0038,app/payments.py,high,Rate-limit bypass allowed 3673 uncapped requests per minute.,all passed,fix_verified
+T-0039,app/payments.py,high,API errors caused 1868 downstream requests to fail per hour.,all passed,fix_verified
+T-0040,app/payments.py,high,Stale API responses served to 25 active sessions.,all passed,fix_verified
+T-0041,"app/db.py, app/queries.py",low,Missing index caused 1642 sequential scans per hour in production.,all passed,fix_verified
+T-0042,app/migrations.py,low,Duplicate charges recorded for 3252 customers due to missing constraint.,all passed,fix_verified
+T-0043,"app/db.py, app/models.py",low,Query timeouts blocked 1050 database write operations per minute.,all passed,fix_verified
+T-0044,"app/billing.py, app/models.py",high,Missing index caused 2880 sequential scans per hour in production.,all passed,fix_verified
+T-0045,app/db.py,low,Duplicate charges recorded for 4323 customers due to missing constraint.,all passed,fix_verified
+T-0046,app/models.py,low,Duplicate charges recorded for 2073 customers due to missing constraint.,all passed,fix_verified
+T-0047,"app/models.py, app/migrations.py",low,Replication lag caused stale reads affecting 4469 concurrent users.,all passed,fix_verified
+T-0048,app/migrations.py,low,Missing index caused 4788 sequential scans per hour in production.,all passed,fix_verified
+T-0049,"app/models.py, app/queries.py",low,Duplicate charges recorded for 3615 customers due to missing constraint.,all passed,fix_verified
+T-0050,app/models.py,low,Query timeouts blocked 3888 database write operations per minute.,all passed,fix_verified
+T-0051,"app/db.py, app/migrations.py",low,Missing index caused 879 sequential scans per hour in production.,all passed,fix_verified
+T-0052,app/models.py,low,Replication lag caused stale reads affecting 355 concurrent users.,all passed,fix_verified
+T-0053,"app/db.py, app/queries.py",low,Missing index caused 2677 sequential scans per hour in production.,all passed,fix_verified
+T-0054,"app/migrations.py, app/billing.py",high,Missing index caused 4169 sequential scans per hour in production.,all passed,fix_verified
+T-0055,"app/models.py, app/billing.py",high,Query timeouts blocked 3423 database write operations per minute.,all passed,fix_verified
+T-0056,app/migrations.py,low,Duplicate charges recorded for 1981 customers due to missing constraint.,all passed,fix_verified
+T-0057,app/migrations.py,low,Duplicate charges recorded for 1275 customers due to missing constraint.,all passed,fix_verified
+T-0058,app/models.py,low,Missing index caused 1808 sequential scans per hour in production.,all passed,fix_verified
+T-0059,app/models.py,low,Query timeouts blocked 1332 database write operations per minute.,all passed,fix_verified
+T-0060,app/billing.py,high,Query timeouts blocked 2931 database write operations per minute.,all passed,fix_verified
+T-0061,"app/migrations.py, app/db.py",low,Replication lag caused stale reads affecting 4548 concurrent users.,all passed,fix_verified
+T-0062,"app/db.py, app/billing.py",high,Replication lag caused stale reads affecting 4248 concurrent users.,all passed,fix_verified
+T-0063,"app/db.py, app/queries.py",low,Query timeouts blocked 868 database write operations per minute.,all passed,fix_verified
+T-0064,app/db.py,low,Query timeouts blocked 2225 database write operations per minute.,all passed,fix_verified
+T-0065,"app/migrations.py, app/billing.py",high,Query timeouts blocked 4405 database write operations per minute.,all passed,fix_verified
+T-0066,"app/migrations.py, app/db.py",low,Replication lag caused stale reads affecting 481 concurrent users.,all passed,fix_verified
+T-0067,app/migrations.py,low,Duplicate charges recorded for 735 customers due to missing constraint.,all passed,fix_verified
+T-0068,"app/models.py, app/db.py",low,Replication lag caused stale reads affecting 1006 concurrent users.,all passed,fix_verified
+T-0069,app/queries.py,low,Missing index caused 2204 sequential scans per hour in production.,all passed,fix_verified
+T-0070,app/queries.py,low,Query timeouts blocked 906 database write operations per minute.,all passed,fix_verified
+T-0071,app/models.py,low,Query timeouts blocked 2565 database write operations per minute.,all passed,fix_verified
+T-0072,app/billing.py,high,Query timeouts blocked 2226 database write operations per minute.,all passed,fix_verified
+T-0073,app/db.py,low,Duplicate charges recorded for 161 customers due to missing constraint.,all passed,fix_verified
+T-0074,"app/billing.py, app/models.py",high,Missing index caused 880 sequential scans per hour in production.,all passed,fix_verified
+T-0075,"app/billing.py, app/migrations.py",high,Query timeouts blocked 1890 database write operations per minute.,all passed,fix_verified
+T-0076,"app/models.py, app/billing.py",high,Replication lag caused stale reads affecting 455 concurrent users.,all passed,fix_verified
+T-0077,app/migrations.py,low,Missing index caused 1347 sequential scans per hour in production.,all passed,fix_verified
+T-0078,"app/billing.py, app/migrations.py",high,Query timeouts blocked 2410 database write operations per minute.,all passed,fix_verified
+T-0079,app/models.py,low,Replication lag caused stale reads affecting 3662 concurrent users.,all passed,fix_verified
+T-0080,app/migrations.py,low,Replication lag caused stale reads affecting 2012 concurrent users.,all passed,fix_verified
+T-0081,app/views/orders.py,low,Blank screen on Edge locked out 18 mobile users.,all passed,fix_verified
+T-0082,app/components.py,low,Double-submission bug created 4128 duplicate orders.,all passed,fix_verified
+T-0083,"app/views/login.py, app/ui/dashboard.py",high,Double-submission bug created 745 duplicate orders.,all passed,fix_verified
+T-0084,"app/views/login.py, app/components.py",high,Broken UI prevented 2464 users from completing checkout.,all passed,fix_verified
+T-0085,app/ui/dashboard.py,low,Blank screen on Safari locked out 4897 mobile users.,all passed,fix_verified
+T-0086,"app/components.py, app/views/checkout.py",high,Double-submission bug created 1195 duplicate orders.,all passed,fix_verified
+T-0087,"app/ui/dashboard.py, app/views/checkout.py",high,Broken UI prevented 4794 users from completing checkout.,all passed,fix_verified
+T-0088,app/views/login.py,high,Blank screen on Edge locked out 2964 mobile users.,all passed,fix_verified
+T-0089,app/ui/dashboard.py,low,Broken UI prevented 164 users from completing checkout.,all passed,fix_verified
+T-0090,app/views/orders.py,low,Broken UI prevented 3753 users from completing checkout.,all passed,fix_verified
+T-0091,"app/ui/dashboard.py, app/views/login.py",high,Accessibility regression blocked keyboard navigation for 2075 users.,all passed,fix_verified
+T-0092,app/views/checkout.py,high,Blank screen on Edge locked out 3781 mobile users.,all passed,fix_verified
+T-0093,app/components.py,low,Double-submission bug created 392 duplicate orders.,all passed,fix_verified
+T-0094,app/ui/dashboard.py,low,Blank screen on Safari locked out 2727 mobile users.,all passed,fix_verified
+T-0095,"app/ui/dashboard.py, app/views/checkout.py",high,Broken UI prevented 3961 users from completing checkout.,all passed,fix_verified
+T-0096,app/views/login.py,high,Blank screen on Safari locked out 4020 mobile users.,all passed,fix_verified
+T-0097,app/components.py,low,Accessibility regression blocked keyboard navigation for 980 users.,all passed,fix_verified
+T-0098,app/views/login.py,high,Accessibility regression blocked keyboard navigation for 153 users.,all passed,fix_verified
+T-0099,app/ui/dashboard.py,low,Accessibility regression blocked keyboard navigation for 2210 users.,all passed,fix_verified
+T-0100,app/views/login.py,high,Broken UI prevented 1171 users from completing checkout.,all passed,fix_verified
+T-0101,app/views/checkout.py,high,Double-submission bug created 933 duplicate orders.,all passed,fix_verified
+T-0102,app/components.py,low,Accessibility regression blocked keyboard navigation for 213 users.,all passed,fix_verified
+T-0103,app/components.py,low,Accessibility regression blocked keyboard navigation for 2483 users.,all passed,fix_verified
+T-0104,app/components.py,low,Double-submission bug created 1000 duplicate orders.,all passed,fix_verified
+T-0105,app/views/orders.py,low,Accessibility regression blocked keyboard navigation for 993 users.,all passed,fix_verified
+T-0106,"app/views/orders.py, app/ui/dashboard.py",low,Double-submission bug created 542 duplicate orders.,all passed,fix_verified
+T-0107,"app/views/login.py, app/views/orders.py",high,Accessibility regression blocked keyboard navigation for 2264 users.,all passed,fix_verified
+T-0108,app/views/login.py,high,Double-submission bug created 1229 duplicate orders.,all passed,fix_verified
+T-0109,app/ui/dashboard.py,low,Double-submission bug created 1565 duplicate orders.,all passed,fix_verified
+T-0110,app/components.py,low,Blank screen on Edge locked out 670 mobile users.,all passed,fix_verified
+T-0111,app/ui/dashboard.py,low,Blank screen on Chrome locked out 2354 mobile users.,all passed,fix_verified
+T-0112,"app/views/checkout.py, app/ui/dashboard.py",high,Accessibility regression blocked keyboard navigation for 3408 users.,all passed,fix_verified
+T-0113,app/views/orders.py,low,Double-submission bug created 3337 duplicate orders.,all passed,fix_verified
+T-0114,app/ui/dashboard.py,low,Accessibility regression blocked keyboard navigation for 990 users.,all passed,fix_verified
+T-0115,app/views/checkout.py,high,Accessibility regression blocked keyboard navigation for 4518 users.,all passed,fix_verified
+T-0116,app/components.py,low,Accessibility regression blocked keyboard navigation for 1153 users.,all passed,fix_verified
+T-0117,app/views/login.py,high,Blank screen on Chrome locked out 2811 mobile users.,all passed,fix_verified
+T-0118,app/views/checkout.py,high,Double-submission bug created 2126 duplicate orders.,all passed,fix_verified
+T-0119,app/components.py,low,Accessibility regression blocked keyboard navigation for 3400 users.,all passed,fix_verified
+T-0120,app/views/orders.py,low,Double-submission bug created 518 duplicate orders.,all passed,fix_verified
+T-0121,"app/login.py, app/auth.py",high,Auth bypass exposed admin panel to 768 non-privileged accounts.,all passed,fix_verified
+T-0122,app/auth_tokens.py,high,Token rotation bug caused 3547 failed refresh attempts per hour.,all passed,fix_verified
+T-0123,app/sessions.py,high,Token rotation bug caused 3887 failed refresh attempts per hour.,all passed,fix_verified
+T-0124,app/sessions.py,high,Token rotation bug caused 4334 failed refresh attempts per hour.,all passed,fix_verified
+T-0125,app/sessions.py,high,Auth bypass exposed admin panel to 1274 non-privileged accounts.,all passed,fix_verified
+T-0126,"app/auth_tokens.py, app/sessions.py",high,Session invalidation logged out 21 active users unexpectedly.,all passed,fix_verified
+T-0127,"app/sessions.py, app/login.py",high,Auth bypass exposed admin panel to 2072 non-privileged accounts.,all passed,fix_verified
+T-0128,"app/sessions.py, app/permissions.py",high,Session invalidation logged out 2470 active users unexpectedly.,all passed,fix_verified
+T-0129,app/login.py,high,Auth bypass exposed admin panel to 4933 non-privileged accounts.,all passed,fix_verified
+T-0130,"app/login.py, app/auth_tokens.py",high,Stale sessions persisted on mobile for 2601 users after logout.,all passed,fix_verified
+T-0131,"app/auth.py, app/permissions.py",high,Session invalidation logged out 3383 active users unexpectedly.,all passed,fix_verified
+T-0132,app/auth.py,high,Token rotation bug caused 3450 failed refresh attempts per hour.,all passed,fix_verified
+T-0133,app/auth_tokens.py,high,Stale sessions persisted on mobile for 1867 users after logout.,all passed,fix_verified
+T-0134,"app/login.py, app/auth_tokens.py",high,Stale sessions persisted on mobile for 3256 users after logout.,all passed,fix_verified
+T-0135,app/permissions.py,low,Session invalidation logged out 1691 active users unexpectedly.,all passed,fix_verified
+T-0136,app/auth.py,high,Auth bypass exposed admin panel to 3820 non-privileged accounts.,all passed,fix_verified
+T-0137,app/sessions.py,high,Token rotation bug caused 1544 failed refresh attempts per hour.,all passed,fix_verified
+T-0138,app/sessions.py,high,Auth bypass exposed admin panel to 3233 non-privileged accounts.,all passed,fix_verified
+T-0139,app/permissions.py,low,Auth bypass exposed admin panel to 3412 non-privileged accounts.,all passed,fix_verified
+T-0140,app/auth_tokens.py,high,Token rotation bug caused 2583 failed refresh attempts per hour.,all passed,fix_verified
+T-0141,app/login.py,high,Auth bypass exposed admin panel to 1529 non-privileged accounts.,all passed,fix_verified
+T-0142,app/login.py,high,Token rotation bug caused 3072 failed refresh attempts per hour.,all passed,fix_verified
+T-0143,app/sessions.py,high,Session invalidation logged out 650 active users unexpectedly.,all passed,fix_verified
+T-0144,app/auth_tokens.py,high,Session invalidation logged out 4606 active users unexpectedly.,all passed,fix_verified
+T-0145,app/login.py,high,Token rotation bug caused 728 failed refresh attempts per hour.,all passed,fix_verified
+T-0146,app/login.py,high,Token rotation bug caused 1591 failed refresh attempts per hour.,all passed,fix_verified
+T-0147,"app/auth_tokens.py, app/sessions.py",high,Token rotation bug caused 2041 failed refresh attempts per hour.,all passed,fix_verified
+T-0148,app/sessions.py,high,Token rotation bug caused 522 failed refresh attempts per hour.,all passed,fix_verified
+T-0149,app/sessions.py,high,Stale sessions persisted on mobile for 2983 users after logout.,all passed,fix_verified
+T-0150,"app/sessions.py, app/login.py",high,Stale sessions persisted on mobile for 2267 users after logout.,all passed,fix_verified
+T-0151,"app/permissions.py, app/sessions.py",high,Session invalidation logged out 1925 active users unexpectedly.,all passed,fix_verified
+T-0152,"app/auth_tokens.py, app/permissions.py",high,Stale sessions persisted on mobile for 3532 users after logout.,all passed,fix_verified
+T-0153,app/auth.py,high,Session invalidation logged out 2494 active users unexpectedly.,all passed,fix_verified
+T-0154,app/login.py,high,Token rotation bug caused 2974 failed refresh attempts per hour.,all passed,fix_verified
+T-0155,"app/auth.py, app/auth_tokens.py",high,Auth bypass exposed admin panel to 2035 non-privileged accounts.,all passed,fix_verified
+T-0156,"app/sessions.py, app/auth_tokens.py",high,Stale sessions persisted on mobile for 1326 users after logout.,all passed,fix_verified
+T-0157,app/login.py,high,Session invalidation logged out 1716 active users unexpectedly.,all passed,fix_verified
+T-0158,app/auth_tokens.py,high,Auth bypass exposed admin panel to 1928 non-privileged accounts.,all passed,fix_verified
+T-0159,app/permissions.py,low,Auth bypass exposed admin panel to 4421 non-privileged accounts.,all passed,fix_verified
+T-0160,app/login.py,high,Stale sessions persisted on mobile for 3065 users after logout.,all passed,fix_verified
+T-0161,scripts/build.py,low,Broken artifact prevented 1531 deployments to production.,all passed,fix_verified
+T-0162,ci/deploy.py,low,Broken artifact prevented 2683 deployments to production.,all passed,fix_verified
+T-0163,ci/docker.py,low,Broken artifact prevented 833 deployments to production.,all passed,fix_verified
+T-0164,ci/pipeline.py,low,Mis-ordered pipeline stages skipped tests on 1903 branches.,all passed,fix_verified
+T-0165,ci/deploy.py,low,Broken artifact prevented 986 deployments to production.,all passed,fix_verified
+T-0166,"scripts/release.py, ci/docker.py",low,Failed CI pipeline blocked 3059 pull requests from merging.,all passed,fix_verified
+T-0167,scripts/release.py,low,OOM in test runner caused 61 flaky test suite runs.,all passed,fix_verified
+T-0168,ci/pipeline.py,low,OOM in test runner caused 2795 flaky test suite runs.,all passed,fix_verified
+T-0169,ci/deploy.py,low,Failed CI pipeline blocked 4920 pull requests from merging.,all passed,fix_verified
+T-0170,scripts/build.py,low,OOM in test runner caused 1526 flaky test suite runs.,all passed,fix_verified
+T-0171,ci/docker.py,low,Failed CI pipeline blocked 4070 pull requests from merging.,all passed,fix_verified
+T-0172,scripts/build.py,low,Failed CI pipeline blocked 3248 pull requests from merging.,all passed,fix_verified
+T-0173,"scripts/release.py, ci/pipeline.py",low,Broken artifact prevented 3268 deployments to production.,all passed,fix_verified
+T-0174,ci/deploy.py,low,Mis-ordered pipeline stages skipped tests on 430 branches.,all passed,fix_verified
+T-0175,scripts/build.py,low,Failed CI pipeline blocked 2990 pull requests from merging.,all passed,fix_verified
+T-0176,"scripts/build.py, ci/docker.py",low,Failed CI pipeline blocked 3566 pull requests from merging.,all passed,fix_verified
+T-0177,ci/pipeline.py,low,Mis-ordered pipeline stages skipped tests on 4743 branches.,all passed,fix_verified
+T-0178,ci/docker.py,low,Failed CI pipeline blocked 433 pull requests from merging.,all passed,fix_verified
+T-0179,"scripts/build.py, ci/pipeline.py",low,OOM in test runner caused 4142 flaky test suite runs.,all passed,fix_verified
+T-0180,ci/deploy.py,low,Broken artifact prevented 4279 deployments to production.,all passed,fix_verified
+T-0181,scripts/build.py,low,Mis-ordered pipeline stages skipped tests on 1626 branches.,all passed,fix_verified
+T-0182,scripts/build.py,low,OOM in test runner caused 447 flaky test suite runs.,all passed,fix_verified
+T-0183,scripts/release.py,low,Broken artifact prevented 1829 deployments to production.,all passed,fix_verified
+T-0184,"ci/docker.py, scripts/build.py",low,Broken artifact prevented 4641 deployments to production.,all passed,fix_verified
+T-0185,scripts/release.py,low,Broken artifact prevented 3152 deployments to production.,all passed,fix_verified
+T-0186,ci/docker.py,low,Broken artifact prevented 346 deployments to production.,all passed,fix_verified
+T-0187,"ci/deploy.py, ci/pipeline.py",low,Mis-ordered pipeline stages skipped tests on 4921 branches.,all passed,fix_verified
+T-0188,"scripts/build.py, ci/deploy.py",low,Broken artifact prevented 3497 deployments to production.,all passed,fix_verified
+T-0189,scripts/release.py,low,Mis-ordered pipeline stages skipped tests on 1474 branches.,all passed,fix_verified
+T-0190,"scripts/build.py, scripts/release.py",low,Broken artifact prevented 3670 deployments to production.,all passed,fix_verified
+T-0191,scripts/build.py,low,Mis-ordered pipeline stages skipped tests on 887 branches.,all passed,fix_verified
+T-0192,scripts/build.py,low,OOM in test runner caused 761 flaky test suite runs.,all passed,fix_verified
+T-0193,ci/docker.py,low,Failed CI pipeline blocked 2580 pull requests from merging.,all passed,fix_verified
+T-0194,scripts/release.py,low,Mis-ordered pipeline stages skipped tests on 1125 branches.,all passed,fix_verified
+T-0195,"ci/pipeline.py, ci/docker.py",low,Broken artifact prevented 4039 deployments to production.,all passed,fix_verified
+T-0196,"ci/docker.py, ci/pipeline.py",low,OOM in test runner caused 2076 flaky test suite runs.,all passed,fix_verified
+T-0197,"ci/deploy.py, scripts/build.py",low,Broken artifact prevented 2092 deployments to production.,all passed,fix_verified
+T-0198,scripts/release.py,low,OOM in test runner caused 4155 flaky test suite runs.,all passed,fix_verified
+T-0199,ci/pipeline.py,low,Broken artifact prevented 1501 deployments to production.,all passed,fix_verified
+T-0200,"ci/deploy.py, scripts/release.py",low,Mis-ordered pipeline stages skipped tests on 1392 branches.,all passed,fix_verified
+T-0001,"app/orders.py, app/invoices.py",low,Stale API responses served to 4558 active sessions.,all passed,fix_verified
+T-0002,app/routes.py,low,Stale API responses served to 3053 active sessions.,all passed,fix_verified
+T-0003,app/routes.py,low,2961 customers received empty responses from the inventory-service endpoint.,all passed,fix_verified
+T-0004,app/payments.py,high,405 customers received empty responses from the notification-service endpoint.,all passed,fix_verified
+T-0005,app/checkout.py,high,Rate-limit bypass allowed 24 uncapped requests per minute.,all passed,fix_verified
+T-0006,app/invoices.py,low,Stale API responses served to 3431 active sessions.,all passed,fix_verified
+T-0007,app/payments.py,high,Stale API responses served to 1871 active sessions.,all passed,fix_verified
+T-0008,app/orders.py,low,API errors caused 4655 downstream requests to fail per hour.,all passed,fix_verified
+T-0009,app/routes.py,low,Rate-limit bypass allowed 4385 uncapped requests per minute.,all passed,fix_verified
+T-0010,"app/invoices.py, app/routes.py",low,1682 customers received empty responses from the inventory-service endpoint.,all passed,fix_verified
+T-0011,app/models.py,low,Duplicate charges recorded for 2005 customers due to missing constraint.,all passed,fix_verified
+T-0012,app/db.py,low,Query timeouts blocked 2219 database write operations per minute.,all passed,fix_verified
+T-0013,app/db.py,low,Replication lag caused stale reads affecting 4881 concurrent users.,all passed,fix_verified
+T-0014,"app/queries.py, app/billing.py",high,Query timeouts blocked 1362 database write operations per minute.,all passed,fix_verified
+T-0015,app/queries.py,low,Duplicate charges recorded for 3335 customers due to missing constraint.,all passed,fix_verified
+T-0016,app/db.py,low,Duplicate charges recorded for 111 customers due to missing constraint.,all passed,fix_verified
+T-0017,app/billing.py,high,Query timeouts blocked 4255 database write operations per minute.,all passed,fix_verified
+T-0018,"app/models.py, app/migrations.py",low,Duplicate charges recorded for 2469 customers due to missing constraint.,all passed,fix_verified
+T-0019,"app/queries.py, app/db.py",low,Missing index caused 3587 sequential scans per hour in production.,all passed,fix_verified
+T-0020,"app/billing.py, app/models.py",high,Query timeouts blocked 872 database write operations per minute.,all passed,fix_verified
+T-0021,"app/views/login.py, app/ui/dashboard.py",high,Double-submission bug created 2166 duplicate orders.,all passed,fix_verified
+T-0022,"app/ui/dashboard.py, app/components.py",low,Double-submission bug created 2431 duplicate orders.,all passed,fix_verified
+T-0023,"app/views/login.py, app/views/checkout.py",high,Double-submission bug created 1944 duplicate orders.,all passed,fix_verified
+T-0024,"app/views/orders.py, app/views/checkout.py",high,Accessibility regression blocked keyboard navigation for 2701 users.,all passed,fix_verified
+T-0025,app/ui/dashboard.py,low,Accessibility regression blocked keyboard navigation for 3877 users.,all passed,fix_verified
+T-0026,app/components.py,low,Blank screen on Firefox locked out 4682 mobile users.,all passed,fix_verified
+T-0027,app/ui/dashboard.py,low,Broken UI prevented 4640 users from completing checkout.,all passed,fix_verified
+T-0028,app/views/login.py,high,Broken UI prevented 883 users from completing checkout.,all passed,fix_verified
+T-0029,app/views/checkout.py,high,Broken UI prevented 262 users from completing checkout.,all passed,fix_verified
+T-0030,"app/views/login.py, app/ui/dashboard.py",high,Broken UI prevented 548 users from completing checkout.,all passed,fix_verified
+T-0031,app/permissions.py,low,Session invalidation logged out 3154 active users unexpectedly.,all passed,fix_verified
+T-0032,app/auth.py,high,Session invalidation logged out 287 active users unexpectedly.,all passed,fix_verified
+T-0033,"app/login.py, app/auth_tokens.py",high,Session invalidation logged out 1096 active users unexpectedly.,all passed,fix_verified
+T-0034,app/login.py,high,Stale sessions persisted on mobile for 3481 users after logout.,all passed,fix_verified
+T-0035,app/login.py,high,Stale sessions persisted on mobile for 406 users after logout.,all passed,fix_verified
+T-0036,"app/permissions.py, app/auth_tokens.py",high,Stale sessions persisted on mobile for 263 users after logout.,all passed,fix_verified
+T-0037,app/permissions.py,low,Session invalidation logged out 2850 active users unexpectedly.,all passed,fix_verified
+T-0038,"app/permissions.py, app/auth.py",high,Session invalidation logged out 4716 active users unexpectedly.,all passed,fix_verified
+T-0039,app/sessions.py,high,Auth bypass exposed admin panel to 2372 non-privileged accounts.,all passed,fix_verified
+T-0040,app/auth_tokens.py,high,Session invalidation logged out 4036 active users unexpectedly.,all passed,fix_verified
+T-0041,"ci/deploy.py, scripts/release.py",low,Broken artifact prevented 2334 deployments to production.,all passed,fix_verified
+T-0042,ci/docker.py,low,Failed CI pipeline blocked 672 pull requests from merging.,all passed,fix_verified
+T-0043,"ci/deploy.py, scripts/release.py",low,Failed CI pipeline blocked 3297 pull requests from merging.,all passed,fix_verified
+T-0044,ci/pipeline.py,low,OOM in test runner caused 1698 flaky test suite runs.,all passed,fix_verified
+T-0045,scripts/release.py,low,Broken artifact prevented 3117 deployments to production.,all passed,fix_verified
+T-0046,scripts/release.py,low,Failed CI pipeline blocked 2864 pull requests from merging.,all passed,fix_verified
+T-0047,"ci/docker.py, scripts/build.py",low,OOM in test runner caused 1398 flaky test suite runs.,all passed,fix_verified
+T-0048,"ci/deploy.py, ci/docker.py",low,Broken artifact prevented 2746 deployments to production.,all passed,fix_verified
+T-0049,"ci/docker.py, ci/deploy.py",low,OOM in test runner caused 1276 flaky test suite runs.,all passed,fix_verified
+T-0050,"ci/deploy.py, scripts/release.py",low,Broken artifact prevented 1945 deployments to production.,all passed,fix_verified

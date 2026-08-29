@@ -7,17 +7,24 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
+import pandas as pd
+
 from triagegate.classifier.knn import KnnClassifier
+from triagegate.classifier.risk import RiskClassifier
 from triagegate.classifier.scorer import DeterministicScorer
 from triagegate.classifier.svm import SvmClassifier
 from triagegate.llm.client import LLMClient
-from triagegate.models.ticket import LadderResult, Ticket, VoterResult
+from triagegate.models.ticket import IncidentSummary, LadderResult, Ticket, VoterResult
 
 _DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 _DEFAULT_SVM_PATH = _DATA_DIR / "svm_model.joblib"
 _DEFAULT_KNN_CSV = _DATA_DIR / "tickets.csv"
+_DEFAULT_RISK_PATH = _DATA_DIR / "risk_model.joblib"
+_DEFAULT_HISTORY_CSV = _DATA_DIR / "incident_history.csv"
 
 _GRANITE_CONFIDENCE_THRESHOLD = 0.6
+
+_MAX_SIMILAR_INCIDENTS = 5
 
 
 class Resolver:
@@ -46,6 +53,13 @@ class Resolver:
     llm_client:
         Optional :class:`~triagegate.llm.client.LLMClient` implementation used as a
         tie-break voter (rung 2.5).  When *None* the resolver is fully offline-safe.
+    risk_model_path:
+        Path to the pre-trained RiskClassifier joblib file.  Defaults to
+        ``data/risk_model.joblib``.  When the file does not exist the risk fields
+        are left as *None* and ``similar_incidents`` is empty.
+    history_csv_path:
+        Path to the incident-history CSV used to populate ``similar_incidents``.
+        Defaults to ``data/incident_history.csv``.
     """
 
     def __init__(
@@ -56,6 +70,8 @@ class Resolver:
         svm_model_path: str | Path | None = None,
         knn_csv_path: str | Path | None = None,
         llm_client: Optional[LLMClient] = None,
+        risk_model_path: str | Path | None = None,
+        history_csv_path: str | Path | None = None,
     ) -> None:
         self.svm_threshold = svm_threshold
         self.agreement_min_voters = agreement_min_voters
@@ -71,6 +87,27 @@ class Resolver:
         # --- kNN: trained at startup from CSV ---
         self._knn = KnnClassifier()
         self._knn.fit(knn_csv_path or _DEFAULT_KNN_CSV)
+
+        # --- RiskClassifier: loaded from joblib (optional) ---
+        self._risk: RiskClassifier | None = None
+        risk_path = Path(risk_model_path) if risk_model_path is not None else _DEFAULT_RISK_PATH
+        if risk_path.exists():
+            self._risk = RiskClassifier()
+            self._risk.load(risk_path)
+
+        # --- Incident history: keyed by ticket id (optional) ---
+        self._history: dict[str, dict] = {}
+        history_path = Path(history_csv_path) if history_csv_path is not None else _DEFAULT_HISTORY_CSV
+        if history_path.exists():
+            self._history = self._load_history(history_path)
+
+        # --- Ticket title lookup (for similar_incidents join) ---
+        self._ticket_titles: dict[str, str] = {}
+        knn_csv = Path(knn_csv_path) if knn_csv_path is not None else Path(_DEFAULT_KNN_CSV)
+        if knn_csv.exists():
+            df = pd.read_csv(knn_csv)
+            if "id" in df.columns and "title" in df.columns:
+                self._ticket_titles = dict(zip(df["id"], df["title"]))
 
     # ------------------------------------------------------------------
     # Public API
@@ -132,6 +169,16 @@ class Resolver:
 
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
+        # --- Risk prediction ---
+        predicted_risk: str | None = None
+        predicted_risk_confidence: float | None = None
+        if self._risk is not None:
+            predicted_risk = self._risk.predict(title, description)
+            predicted_risk_confidence = round(self._risk.confidence(title, description), 4)
+
+        # --- Similar incidents (kNN neighbors joined to history) ---
+        similar_incidents = self._get_similar_incidents(title, description)
+
         return LadderResult(
             ticket_id=ticket.id,
             title=title,
@@ -141,11 +188,50 @@ class Resolver:
             voters=voters,
             evidence=evidence,
             elapsed_ms=round(elapsed_ms, 3),
+            predicted_risk=predicted_risk,
+            predicted_risk_confidence=predicted_risk_confidence,
+            similar_incidents=similar_incidents,
         )
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _load_history(path: Path) -> dict[str, dict]:
+        """Load incident_history.csv into a dict keyed by ticket id."""
+        df = pd.read_csv(path)
+        return {str(row["id"]): row.to_dict() for _, row in df.iterrows()}
+
+    def _get_similar_incidents(self, title: str, description: str) -> list[IncidentSummary]:
+        """Return up to 5 IncidentSummary objects for the kNN neighbors."""
+        if not self._history:
+            return []
+        neighbors = self._knn.neighbors(title, description)
+        seen_ids: set[str] = set()
+        results: list[IncidentSummary] = []
+        for nbr in neighbors:
+            tid = nbr.ticket_id
+            if not tid or tid not in self._history:
+                continue
+            if tid in seen_ids:
+                continue
+            seen_ids.add(tid)
+            hist = self._history[tid]
+            nbr_title = self._ticket_titles.get(tid, nbr.title)
+            results.append(
+                IncidentSummary(
+                    id=tid,
+                    title=nbr_title,
+                    domain=nbr.domain,
+                    risk_level=str(hist.get("risk_level", "")),
+                    impact=str(hist.get("impact", "")),
+                    verdict=str(hist.get("verdict", "")),
+                )
+            )
+            if len(results) >= _MAX_SIMILAR_INCIDENTS:
+                break
+        return results
 
     def _try_granite_tiebreak(
         self,
