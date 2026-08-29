@@ -65,6 +65,55 @@ class TestStaticFiles:
         assert "text/html" in response.headers["content-type"]
 
 
+class TestNewStaticContent:
+    """Verify the new surface areas are present in the served static files."""
+
+    def test_index_contains_similar_incidents_card(self):
+        """index.html must include the Similar Past Incidents card."""
+        response = client.get("/")
+        assert "Similar Past Incidents" in response.text
+
+    def test_index_contains_predicted_risk_row(self):
+        """index.html must include the predicted-risk-row element."""
+        response = client.get("/")
+        assert "predicted-risk-row" in response.text
+
+    def test_index_contains_rationale_row(self):
+        """index.html must include the rationale-row element."""
+        response = client.get("/")
+        assert "rationale-row" in response.text
+
+    def test_index_contains_human_approval_node(self):
+        """index.html must include the Human approval pipeline node."""
+        response = client.get("/")
+        assert "Human approval" in response.text
+
+    def test_index_contains_escalated_waiting_copy(self):
+        """index.html must include the updated escalation waiting copy."""
+        response = client.get("/")
+        assert "awaiting Bug Investigator" in response.text
+
+    def test_style_contains_human_pending(self):
+        """style.css must define the pp-human-pending class."""
+        response = client.get("/style.css")
+        assert "pp-human-pending" in response.text
+
+    def test_style_contains_predicted_risk_badge(self):
+        """style.css must define the predicted-risk-badge class."""
+        response = client.get("/style.css")
+        assert "predicted-risk-badge" in response.text
+
+    def test_style_contains_rationale_row(self):
+        """style.css must define the rationale-row class."""
+        response = client.get("/style.css")
+        assert "rationale-row" in response.text
+
+    def test_style_contains_chip_risk_high(self):
+        """style.css must define chip-risk-high for similar incidents."""
+        response = client.get("/style.css")
+        assert "chip-risk-high" in response.text
+
+
 class TestIndexHtmlRedirect:
     def test_index_html_redirects(self):
         """/index.html must issue a 307 or 308 redirect."""

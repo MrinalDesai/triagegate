@@ -43,6 +43,12 @@
   <!-- Result area (hidden until response) -->
   <div id="result-area" class="hidden">
 
+    <!-- Predicted risk badge (shown when predicted_risk is non-null) -->
+    <div id="predicted-risk-row" class="hidden" style="margin-bottom:16px"></div>
+
+    <!-- Decision rationale (shown after routing) -->
+    <div id="rationale-row" class="hidden rationale-row"></div>
+
     <!-- Two-column layout: main content left, pipeline path right -->
     <div class="result-layout">
 
@@ -73,11 +79,30 @@
         <!-- Timing -->
         <div id="elapsed-row" class="elapsed mt-8"></div>
 
+        <!-- Similar past incidents (hidden when empty) -->
+        <div class="card hidden" id="similar-card">
+          <div class="card-title">Similar Past Incidents</div>
+          <div id="similar-summary" class="similar-summary"></div>
+          <table id="similar-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Domain</th>
+                <th>Risk</th>
+                <th>Impact</th>
+                <th>Verdict</th>
+              </tr>
+            </thead>
+            <tbody id="similar-tbody"></tbody>
+          </table>
+        </div>
+
         <!-- Bob Escalation panel (only when domain === "escalated") -->
         <div class="card hidden" id="escalation-card">
           <div class="card-title">Bob Investigator Report</div>
           <div id="escalation-inner">
-            <span class="spinner"></span> Loading investigation…
+            <span class="spinner"></span> Escalated — awaiting Bug Investigator. This panel updates automatically when the investigation report is filed.
           </div>
         </div>
 
@@ -132,6 +157,7 @@ const PIPELINE_NODES = [
   { id: 'voters',    label: 'Voters',             hasBranch: true  },
   { id: 'granite',   label: 'Granite tiebreak',   hasBranch: false },
   { id: 'bob',       label: 'Bob Investigator',   hasBranch: false },
+  { id: 'human',     label: 'Human approval',     hasBranch: false },
   { id: 'resolved',  label: 'Resolved',           hasBranch: false },
 ];
 
@@ -142,8 +168,9 @@ const PIPELINE_NODES = [
  * @param {boolean}     isEscalated — true when domain === "escalated"
  * @param {boolean}     escalationSettled — true once Bob report has loaded
  * @param {string|null} verdict     — "fix_verified" | "fix_failed" | "needs_human" | null
+ * @param {string|null} riskLevel   — "high" | "low" | null (from investigation report)
  */
-function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict) {
+function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict, riskLevel) {
   const spine = document.getElementById('pipeline-spine');
   spine.innerHTML = '';
 
@@ -210,22 +237,42 @@ function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict) {
       } else {
         nodeStates['bob'] = 'pp-escalating';
       }
-      // Resolved: only lights if report is settled
-      if (escalationSettled && verdict) {
-        vlineStates[5] = verdict === 'fix_failed' ? 'pp-amber' : 'pp-lit';
+      // Human approval node
+      if (!escalationSettled) {
+        // Report not yet arrived: dark (never-reached)
+        nodeStates['human'] = 'pp-dark';
+      } else if (verdict === 'needs_human') {
+        // Pulsing red — awaiting human
+        nodeStates['human'] = 'pp-human-pending';
+      } else if (riskLevel === 'high') {
+        // Report settled with high risk: solid red (approved/denied)
+        nodeStates['human'] = 'pp-human-lit';
+      } else {
+        // Low risk: auto-applied, human approval bypassed (dim-traversed)
+        nodeStates['human'] = 'pp-human-bypass';
+      }
+      // vline bob → human
+      vlineStates[5] = escalationSettled ? (riskLevel === 'high' ? 'pp-amber' : 'pp-traversed') : '';
+      // Resolved: only lights if report is settled and not needs_human
+      if (escalationSettled && verdict && verdict !== 'needs_human') {
+        vlineStates[6] = verdict === 'fix_failed' ? 'pp-amber' : 'pp-lit';
         if (verdict === 'fix_verified') {
           nodeStates['resolved'] = 'pp-resolved';
         } else if (verdict === 'fix_failed') {
           nodeStates['resolved'] = 'pp-resolved-failed';
         } else {
-          // needs_human
-          nodeStates['resolved'] = 'pp-resolved-human';
+          nodeStates['resolved'] = 'pp-resolved';
         }
       } else {
-        // Resolved stays dark until verdict arrives
+        // Resolved stays dark when needs_human or no verdict yet
         nodeStates['resolved'] = 'pp-dark';
       }
     }
+  }
+
+  // For non-escalated paths, human node is never-reached
+  if (resolvedBy !== 'escalate') {
+    nodeStates['human'] = 'pp-dark';
   }
 
   // Build the DOM
@@ -262,6 +309,88 @@ function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict) {
 
     spine.appendChild(step);
   });
+}
+
+// ── Predicted risk badge ──────────────────────────────────────────────────────
+function buildPredictedRisk(predictedRisk, confidence) {
+  const row = document.getElementById('predicted-risk-row');
+  if (!predictedRisk) {
+    row.classList.add('hidden');
+    return;
+  }
+  const level = predictedRisk.toUpperCase();
+  const pct   = confidence != null ? Math.round(confidence * 100) : null;
+  const cls   = level === 'HIGH' ? 'predicted-risk-badge risk-high' : 'predicted-risk-badge risk-low';
+  const label = level === 'HIGH' ? 'HIGH' : 'LOW';
+  row.className = cls;
+  row.textContent = `Predicted risk: ${label}` + (pct != null ? ` (${pct}%)` : '');
+  row.classList.remove('hidden');
+}
+
+// ── Decision rationale ────────────────────────────────────────────────────────
+function buildRationale(data) {
+  const row = document.getElementById('rationale-row');
+  const rb  = data.resolved_by;
+  let text  = '';
+
+  if (rb === 'svm_gate') {
+    const svm = data.voters.find(v => v.voter === 'svm');
+    const conf = svm ? Math.round(svm.confidence * 100) + '%' : '—';
+    text = `Routed to ${data.domain}: SVM cleared the gate at ${conf}.`;
+  } else if (rb === 'voter_agreement') {
+    const k = data.voters.filter(v => v.domain === data.domain).length;
+    text = `Routed to ${data.domain}: ${k} of 3 voters agreed with supporting evidence.`;
+  } else if (rb === 'granite_tiebreak') {
+    const granite = data.voters.find(v => v.voter === 'granite');
+    const conf = granite ? Math.round(granite.confidence * 100) + '%' : '—';
+    const agreeing = data.voters.find(v => v.voter !== 'granite' && v.domain === data.domain);
+    const voter = agreeing ? agreeing.voter : 'a voter';
+    text = `Routed to ${data.domain}: Granite broke the tie at ${conf}, agreeing with ${voter}.`;
+  } else if (rb === 'escalate') {
+    const domains = [...new Set(data.voters.filter(v => v.voter !== 'granite').map(v => v.domain))].join(', ');
+    text = `Escalated: voters disagreed (${domains}), no scorer evidence, Granite abstained or disagreed — investigation required.`;
+  }
+
+  if (text) {
+    row.textContent = text;
+    row.classList.remove('hidden');
+  } else {
+    row.classList.add('hidden');
+  }
+}
+
+// ── Similar incidents card ────────────────────────────────────────────────────
+function buildSimilarIncidents(incidents) {
+  const card  = document.getElementById('similar-card');
+  const tbody = document.getElementById('similar-tbody');
+  const summary = document.getElementById('similar-summary');
+  tbody.innerHTML = '';
+
+  if (!incidents || incidents.length === 0) {
+    card.classList.add('hidden');
+    return;
+  }
+
+  const highCount = incidents.filter(inc => inc.risk_level && inc.risk_level.toLowerCase() === 'high').length;
+  summary.textContent =
+    `Retrieved ${incidents.length} similar resolved incident${incidents.length !== 1 ? 's' : ''}; ` +
+    `${highCount} involved high-risk change${highCount !== 1 ? 's' : ''}.`;
+
+  incidents.forEach(inc => {
+    const tr = document.createElement('tr');
+    const riskCls = inc.risk_level && inc.risk_level.toLowerCase() === 'high'
+      ? 'chip chip-risk-high' : 'chip chip-risk-low';
+    tr.innerHTML = `
+      <td>${esc(inc.id)}</td>
+      <td style="max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(inc.title)}</td>
+      <td><span class="chip">${esc(inc.domain)}</span></td>
+      <td><span class="${riskCls}">${esc(inc.risk_level || '')}</span></td>
+      <td>${esc(inc.impact || '')}</td>
+      <td>${esc(inc.verdict || '')}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  card.classList.remove('hidden');
 }
 
 // ── Voters table ──────────────────────────────────────────────────────────────
@@ -320,7 +449,7 @@ async function _renderReport(r, resolvedBy) {
   const inner = document.getElementById('escalation-inner');
 
   // Settle the pipeline node now that the report has loaded
-  buildPipeline(resolvedBy, true, true, r.verdict);
+  buildPipeline(resolvedBy, true, true, r.verdict, (r.risk_level || 'low').toLowerCase());
 
   const verdictClass = { fix_verified: 'fix-verified', fix_failed: 'fix-failed', needs_human: 'needs-human' }[r.verdict] || 'needs-human';
   const verdictLabel = { fix_verified: '✓ FIX VERIFIED', fix_failed: '✗ FIX FAILED', needs_human: '⚠ NEEDS HUMAN' }[r.verdict] || r.verdict;
@@ -390,7 +519,7 @@ async function loadEscalation(ticketId, resolvedBy) {
       if (Date.now() < deadline) {
         _pollTimer = setTimeout(attempt, POLL_INTERVAL_MS);
       } else {
-        inner.innerHTML = '<span class="mute">Investigation timed out — no report filed within 10 minutes.</span>';
+        inner.innerHTML = '<span class="mute">No report filed yet — polling paused. Re-submit the ticket to resume.</span>';
       }
     } catch (e) {
       _clearPoll();
@@ -438,13 +567,22 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
     const isEscalated = data.domain === 'escalated';
 
     // Build pipeline — escalating pulse until report loads
-    buildPipeline(data.resolved_by, isEscalated, false, null);
+    buildPipeline(data.resolved_by, isEscalated, false, null, null);
+
+    // Predicted risk badge
+    buildPredictedRisk(data.predicted_risk, data.predicted_risk_confidence);
+
+    // Decision rationale
+    buildRationale(data);
 
     // Voters
     buildVoters(data.voters);
 
     // Evidence
     buildEvidence(data.evidence);
+
+    // Similar incidents
+    buildSimilarIncidents(data.similar_incidents || []);
 
     // Elapsed
     document.getElementById('elapsed-row').textContent = `Elapsed: ${data.elapsed_ms} ms`;

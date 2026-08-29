@@ -430,6 +430,33 @@ button[type="submit"]:disabled { opacity: .4; cursor: not-allowed; }
   animation: pp-pulse-escalated 2s ease-out forwards;
 }
 
+/* HUMAN APPROVAL — pulsing red (needs_human, awaiting decision) */
+.pp-node.pp-human-pending {
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(255,93,93,.08);
+  animation: pp-pulse-human-loop 1.2s ease-in-out infinite;
+}
+@keyframes pp-pulse-human-loop {
+  0%, 100% { box-shadow: 0 0 18px 6px  rgba(255,93,93,.45), 0 0 0 1px var(--red); }
+  50%       { box-shadow: 0 0 32px 12px rgba(255,93,93,.65), 0 0 0 1px var(--red); }
+}
+
+/* HUMAN APPROVAL — solid red (high-risk, required and actioned) */
+.pp-node.pp-human-lit {
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(255,93,93,.10);
+  box-shadow: 0 0 10px 2px rgba(255,93,93,.15), 0 0 0 1px var(--red);
+}
+
+/* HUMAN APPROVAL — dim traversed (low-risk, bypassed by auto-apply) */
+.pp-node.pp-human-bypass {
+  border-color: rgba(255,93,93,.3);
+  color: rgba(255,93,93,.45);
+  background: rgba(255,93,93,.04);
+}
+
 /* Amber vline for escalation path */
 .pp-vline.pp-amber  { background: var(--amber); }
 
@@ -704,6 +731,73 @@ pre .diff-meta { color: var(--mute); }
   color: var(--signal);
   border-color: var(--signal-dim);
   background: rgba(61,220,132,.08);
+}
+
+/* ── Predicted risk badge (top of result area) ─────────────────────────────── */
+.predicted-risk-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1px solid;
+  margin-bottom: 16px;
+}
+.predicted-risk-badge.risk-high {
+  color: var(--red);
+  border-color: #533;
+  background: rgba(255,93,93,.08);
+}
+.predicted-risk-badge.risk-low {
+  color: var(--signal);
+  border-color: var(--signal-dim);
+  background: rgba(61,220,132,.08);
+}
+
+/* ── Decision rationale ────────────────────────────────────────────────────── */
+.rationale-row {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--mute);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+/* ── Similar incidents card extras ─────────────────────────────────────────── */
+.similar-summary {
+  font-size: 12px;
+  color: var(--mute);
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
+.chip-risk-high {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .05em;
+  background: rgba(255,93,93,.08);
+  color: var(--red);
+  border: 1px solid #533;
+  border-radius: 20px;
+  padding: 3px 10px;
+}
+
+.chip-risk-low {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .05em;
+  background: rgba(61,220,132,.08);
+  color: var(--signal);
+  border: 1px solid var(--signal-dim);
+  border-radius: 20px;
+  padding: 3px 10px;
 }
 
 /* ── Utility ───────────────────────────────────────────────────────────────── */
