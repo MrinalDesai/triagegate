@@ -4,11 +4,12 @@ import csv
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Set
+from typing import Any, Dict, Optional, Set
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 try:
     from dotenv import load_dotenv  # type: ignore
@@ -17,6 +18,10 @@ except ImportError:
     pass
 
 from triagegate.escalation.bob_tier import EscalationReport, EscalationStore
+from triagegate.escalation.dispatch import (
+    dispatch_investigation,
+    get_dispatch_status,
+)
 from triagegate.llm.client import GraniteClient
 from triagegate.models.ticket import LadderResult, RoutingDecision, Ticket
 from triagegate.pipeline.resolver import Resolver
@@ -48,6 +53,11 @@ _escalation_store = EscalationStore()
 # In-memory set of ticket_ids that have already been written to incident history.
 # Prevents duplicate rows on concurrent or replayed requests.
 _incident_history_written: Set[str] = set()
+
+# In-memory set of ticket_ids whose routing result was "escalated".
+# Populated by /api/route; used by /api/escalations/{id}/dispatch to gate
+# dispatch requests without trusting any client-supplied field.
+_escalated_ticket_ids: Set[str] = set()
 
 
 def _make_llm_client():
@@ -120,6 +130,8 @@ def config() -> dict:
 def route_ticket(ticket: Ticket) -> LadderResult:
     result = _get_resolver().resolve(ticket)
     _rung_counts[result.resolved_by] += 1
+    if result.domain == "escalated":
+        _escalated_ticket_ids.add(ticket.id)
     return result
 
 
@@ -259,6 +271,84 @@ def reject_escalation(ticket_id: str) -> EscalationReport:
     report = report.model_copy(update={"status": "rejected"})
     _escalation_store.save(report)
     return report
+
+
+# ---------------------------------------------------------------------------
+# Dispatch endpoints
+# ---------------------------------------------------------------------------
+
+class DispatchRequest(BaseModel):
+    title: str
+    description: str
+
+
+@app.post("/api/escalations/{ticket_id}/dispatch", status_code=202)
+def dispatch_escalation(ticket_id: str, body: DispatchRequest) -> Dict[str, Any]:
+    """Start a headless Bob investigation for an escalated ticket.
+
+    Server-side escalation gate: the ticket_id must be in ``_escalated_ticket_ids``
+    (populated by /api/route when domain == "escalated") OR have an existing
+    escalation report on disk.  We NEVER trust a client-supplied "escalated"
+    field — the check is performed entirely from server state.
+
+    Returns:
+        202 Accepted  — dispatch started (or reused).
+        409 Conflict  — ticket was not escalated.
+        503 Service Unavailable — BOB_API_KEY missing or CLI unavailable.
+    """
+    from triagegate.escalation.dispatch import _get_dispatch, _is_active, _public_record
+
+    # ── Idempotency check ──────────────────────────────────────────────────
+    existing = _get_dispatch(ticket_id)
+    if existing is not None and _is_active(existing):
+        record = _public_record(existing)
+        record["reused"] = True
+        return record
+
+    # ── Server-side escalation gate ────────────────────────────────────────
+    # A ticket is considered "escalated" when:
+    #   (a) /api/route saw it and domain == "escalated"  (_escalated_ticket_ids), OR
+    #   (b) an escalation report already exists on disk (i.e. Bob already filed one).
+    # We never look at client-supplied body fields for this check.
+    has_report = _escalation_store.load(ticket_id) is not None
+    was_routed_as_escalated = ticket_id in _escalated_ticket_ids
+    if not was_routed_as_escalated and not has_report:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Ticket {ticket_id!r} was not escalated. "
+                "Route the ticket via POST /api/route first and confirm the result is 'escalated'."
+            ),
+        )
+
+    try:
+        record = dispatch_investigation(ticket_id, body.title, body.description)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except RuntimeError as exc:
+        msg = str(exc)
+        # Sanitize: never expose API key value or internal paths
+        if "BOB_API_KEY" in msg or "api_key" in msg.lower():
+            raise HTTPException(status_code=503, detail="BOB_API_KEY is not configured.")
+        raise HTTPException(status_code=503, detail=f"Dispatch unavailable: {msg}")
+
+    return record
+
+
+@app.get("/api/escalations/{ticket_id}/dispatch/status")
+def dispatch_status(ticket_id: str) -> Dict[str, Any]:
+    """Return the current dispatch status for *ticket_id*.
+
+    Uses ``process.poll()`` lazily — returns immediately without blocking.
+    Never returns the API key, full environment, or raw exception details.
+    """
+    record = get_dispatch_status(ticket_id)
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No active dispatch found for ticket {ticket_id!r}",
+        )
+    return record
 
 
 def _append_incident_history(report: EscalationReport) -> None:

@@ -113,6 +113,11 @@
         <!-- Bob Escalation panel (only when domain === "escalated") -->
         <div class="card hidden" id="escalation-card">
           <div class="card-title">Bob Investigator Report</div>
+          <!-- Dispatch control row (shown when escalated, before report lands) -->
+          <div id="dispatch-row" class="dispatch-row hidden">
+            <button id="btn-dispatch" class="btn-dispatch">&#x1F916; Dispatch to Bob Investigator</button>
+            <span id="dispatch-status-msg" class="dispatch-status-msg"></span>
+          </div>
           <div id="escalation-inner">
             <span class="spinner"></span> Escalated — awaiting Bug Investigator. This panel updates automatically when the investigation report is filed.
           </div>
@@ -450,15 +455,136 @@ function buildEvidence(evidence) {
 // 5 seconds (up to 10 minutes) while the Bob Investigator node pulses.
 // Stop polling as soon as a report is returned; render and settle the node.
 
-const POLL_INTERVAL_MS  = 5_000;   // 5 seconds
-const POLL_MAX_MS       = 600_000; // 10 minutes
-let   _pollTimer        = null;
+const POLL_INTERVAL_MS        = 5_000;   // 5 seconds
+const POLL_MAX_MS             = 600_000; // 10 minutes
+const DISPATCH_POLL_INTERVAL  = 8_000;   // 8 seconds
+let   _pollTimer              = null;
+let   _dispatchPollTimer      = null;
 
 function _clearPoll() {
   if (_pollTimer !== null) {
     clearTimeout(_pollTimer);
     _pollTimer = null;
   }
+}
+
+function _clearDispatchPoll() {
+  if (_dispatchPollTimer !== null) {
+    clearTimeout(_dispatchPollTimer);
+    _dispatchPollTimer = null;
+  }
+}
+
+// ── Dispatch state ────────────────────────────────────────────────────────────
+// Tracks UI dispatch state for the current ticket.
+// States:
+//   null                    → not dispatched yet (show Dispatch button)
+//   "dispatching"           → POST in flight
+//   "dispatched_running"    → subprocess started, no report yet
+//   "proposal_pending"      → report landed with status pending_approval
+//   "completed"             → report completed
+//   "failed"                → dispatch subprocess failed before filing a report
+let   _dispatchState          = null;
+let   _currentDispatchTicketId = null;
+let   _currentDispatchTitle    = null;
+let   _currentDispatchDesc     = null;
+
+function _resetDispatchState() {
+  _dispatchState           = null;
+  _currentDispatchTicketId = null;
+  _currentDispatchTitle    = null;
+  _currentDispatchDesc     = null;
+  _clearDispatchPoll();
+}
+
+function _setDispatchMsg(msg, isError) {
+  const el = document.getElementById('dispatch-status-msg');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? 'var(--red)' : '';
+}
+
+function _showDispatchRow(show) {
+  const row = document.getElementById('dispatch-row');
+  if (row) row.classList.toggle('hidden', !show);
+}
+
+// Wire up the Dispatch button (called from loadEscalation)
+function _initDispatchButton(ticketId, title, desc) {
+  _currentDispatchTicketId = ticketId;
+  _currentDispatchTitle    = title;
+  _currentDispatchDesc     = desc;
+  _showDispatchRow(true);
+
+  const btn = document.getElementById('btn-dispatch');
+  if (!btn) return;
+
+  // Remove any previous listener by cloning
+  const fresh = btn.cloneNode(true);
+  btn.parentNode.replaceChild(fresh, btn);
+
+  fresh.addEventListener('click', async () => {
+    fresh.disabled = true;
+    _dispatchState = 'dispatching';
+    _setDispatchMsg('Dispatching…', false);
+    try {
+      const resp = await fetch(
+        `/api/escalations/${encodeURIComponent(ticketId)}/dispatch`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description: desc }),
+        }
+      );
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        throw new Error(err.detail || resp.statusText);
+      }
+      _dispatchState = 'dispatched_running';
+      _setDispatchMsg('Investigator dispatched — working\u2026', false);
+      // Hide the button (keep the status message)
+      fresh.classList.add('hidden');
+      // Start polling dispatch status so early failures surface quickly
+      _scheduleDispatchStatusPoll(ticketId);
+    } catch (e) {
+      fresh.disabled = false;
+      _dispatchState = null;
+      _setDispatchMsg(`Automated dispatch unavailable — run Bug Investigator manually`, true);
+    }
+  });
+}
+
+// Poll the dispatch-status endpoint to surface subprocess failures early
+function _scheduleDispatchStatusPoll(ticketId) {
+  _clearDispatchPoll();
+  _dispatchPollTimer = setTimeout(async function poll() {
+    // If the report has already landed (handled by the report poller), stop.
+    if (_dispatchState === 'proposal_pending' || _dispatchState === 'completed') {
+      _clearDispatchPoll();
+      return;
+    }
+    try {
+      const resp = await fetch(`/api/escalations/${encodeURIComponent(ticketId)}/dispatch/status`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.status === 'failed') {
+          _dispatchState = 'failed';
+          _clearDispatchPoll();
+          _setDispatchMsg('Automated dispatch unavailable — run Bug Investigator manually', true);
+          // Re-enable button so operator can retry
+          const btn = document.getElementById('btn-dispatch');
+          if (btn) { btn.disabled = false; btn.classList.remove('hidden'); }
+          return;
+        }
+        if (data.status === 'completed') {
+          _dispatchState = 'completed';
+          _clearDispatchPoll();
+          return;
+        }
+      }
+    } catch (_) { /* network blip — keep polling */ }
+    _dispatchPollTimer = setTimeout(poll, DISPATCH_POLL_INTERVAL);
+  }, DISPATCH_POLL_INTERVAL);
 }
 
 async function _renderReport(r, resolvedBy) {
@@ -667,19 +793,34 @@ function _scheduleResumePoll(ticketId, resolvedBy) {
   _pollTimer = setTimeout(pollForCompleted, POLL_INTERVAL_MS);
 }
 
-async function loadEscalation(ticketId, resolvedBy) {
+async function loadEscalation(ticketId, resolvedBy, title, desc) {
   const card  = document.getElementById('escalation-card');
   const inner = document.getElementById('escalation-inner');
   card.classList.remove('hidden');
   _clearPoll();
+  _resetDispatchState();
 
   const deadline = Date.now() + POLL_MAX_MS;
+
+  // Show the dispatch button (state 1: escalated but not yet dispatched)
+  _initDispatchButton(ticketId, title || '', desc || '');
 
   async function attempt() {
     try {
       const resp = await fetch(`/api/escalations/${encodeURIComponent(ticketId)}`);
       if (resp.ok) {
         const r = await resp.json();
+        // Update dispatch state when a report lands
+        if (r.status === 'pending_approval' || r.status === 'approved') {
+          _dispatchState = 'proposal_pending';
+          _clearDispatchPoll();
+          _setDispatchMsg('', false);
+          _showDispatchRow(false);
+        } else if (r.status === 'completed' || r.status === 'rejected') {
+          _dispatchState = 'completed';
+          _clearDispatchPoll();
+          _showDispatchRow(false);
+        }
         await _renderReport(r, resolvedBy);
         // Stop polling on terminal states; keep polling for pending_approval and approved
         if (r.status === 'completed' || r.status === 'rejected') {
@@ -724,6 +865,7 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
 
   // Cancel any in-flight poll from a previous submission
   _clearPoll();
+  _resetDispatchState();
 
   // Reset result area
   document.getElementById('result-area').classList.add('hidden');
@@ -768,8 +910,9 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
     document.getElementById('elapsed-row').textContent = `Elapsed: ${data.elapsed_ms} ms`;
 
     // Escalation panel: show with looping amber, then poll until report lands
+    // Pass title and desc so the Dispatch button can use them
     if (isEscalated) {
-      loadEscalation(data.ticket_id, data.resolved_by);
+      loadEscalation(data.ticket_id, data.resolved_by, title, desc);
     }
 
   } catch (err) {
