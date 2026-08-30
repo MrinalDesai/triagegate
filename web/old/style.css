@@ -1048,15 +1048,6 @@ pre .diff-meta { color: var(--mute); }
   color: var(--signal);
   background: rgba(61, 220, 132, 0.08);
 }
-.preset-btn-simulation {
-  color: var(--violet);
-  border-color: rgba(180, 140, 255, 0.45);
-}
-.preset-btn-simulation:hover {
-  color: #d2b9ff;
-  border-color: var(--violet);
-  background: rgba(180, 140, 255, 0.09);
-}
 .demo-presets-note {
   margin-top: 10px;
   font-size: 11px;
@@ -1070,27 +1061,6 @@ pre .diff-meta { color: var(--mute); }
   border-radius: 4px;
 }
 .demo-presets-note strong { color: var(--amber); }
-
-.simulation-notice {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-  padding: 10px 13px;
-  color: #d2b9ff;
-  background: rgba(180, 140, 255, 0.08);
-  border: 1px solid rgba(180, 140, 255, 0.48);
-  border-radius: 7px;
-  font-size: 11px;
-  line-height: 1.45;
-}
-.simulation-notice strong {
-  color: var(--violet);
-  letter-spacing: 0.12em;
-  font-size: 10px;
-}
-.simulation-notice code { color: var(--ink); }
 
 /* --- Bob connectivity test button --- */
 .bob-ping-btn {

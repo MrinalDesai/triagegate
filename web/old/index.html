@@ -46,22 +46,19 @@
       <div class="demo-presets-row">
         <button type="button" class="preset-btn" data-preset="svm">SVM gate · instant</button>
         <button type="button" class="preset-btn" data-preset="voter">Voter agreement</button>
-        <button type="button" class="preset-btn preset-btn-simulation" data-preset="granite">Granite path · </button>
+        <button type="button" class="preset-btn" data-preset="granite">Granite tiebreak</button>
         <button type="button" class="preset-btn" data-preset="escalate">Escalation → Bob</button>
       </div>
       <div class="demo-presets-note">
-        
+        The escalation preset replays a <strong>recorded live Bob investigation</strong>
+        (ticket A-0007). Run <code>python scripts/seed_demo_report.py</code> first to load it.
+        Routing presets classify live in real time.
       </div>
     </div>
   </div>
 
   <!-- Result area (hidden until response) -->
   <div id="result-area" class="hidden">
-
-    <div id="simulation-notice" class="simulation-notice hidden">
-      <strong>GRANITE PATH</strong>
-      <span>Deterministic fixture from <code>tests/test_granite.py</code> — live watsonx.ai call.</span>
-    </div>
 
     <!-- Predicted risk badge (shown when predicted_risk is non-null) -->
     <div id="predicted-risk-row" class="hidden" style="margin-bottom:16px"></div>
@@ -180,7 +177,7 @@ const PIPELINE_NODES = [
   { id: 'ticket',    label: 'Ticket',            hasBranch: false },
   { id: 'svm_gate',  label: 'SVM gate',           hasBranch: true  },
   { id: 'voters',    label: 'Voters',             hasBranch: true  },
-  { id: 'granite',   label: 'Granite tiebreak',   hasBranch: true  },
+  { id: 'granite',   label: 'Granite tiebreak',   hasBranch: false },
   { id: 'bob',       label: 'Bob Investigator',   hasBranch: false },
   { id: 'human',     label: 'Human approval',     hasBranch: false },
   { id: 'resolved',  label: 'Resolved',           hasBranch: false },
@@ -189,7 +186,7 @@ const PIPELINE_NODES = [
 /**
  * Build (or rebuild) the pipeline-spine DOM.
  *
- * @param {string|null} resolvedBy  — "svm_gate" | "voter_agreement" | "granite_tiebreak" | "escalate" | null
+ * @param {string|null} resolvedBy  — "svm_gate" | "voter_agreement" | "escalate" | null
  * @param {boolean}     isEscalated — true when domain === "escalated"
  * @param {boolean}     escalationSettled — true once Bob report has loaded
  * @param {string|null} verdict     — "fix_verified" | "fix_failed" | "needs_human" | null
@@ -249,16 +246,6 @@ function buildPipeline(resolvedBy, isEscalated, escalationSettled, verdict, risk
       nodeStates['resolved'] = 'pp-resolved';
       // Granite tiebreak: never reached
       nodeStates['granite'] = 'pp-dark';
-    } else if (resolvedBy === 'granite_tiebreak') {
-      // SVM did not clear the gate and the deterministic voters disagreed.
-      // Granite broke the tie, so its node and route branch resolve here.
-      nodeStates['svm_gate'] = 'pp-traversed';
-      vlineStates[2] = 'pp-traversed';
-      nodeStates['voters'] = 'pp-traversed';
-      vlineStates[3] = 'pp-lit';
-      nodeStates['granite'] = 'pp-resolved';
-      branchStates['granite'] = 'pp-lit';
-      nodeStates['resolved'] = 'pp-resolved';
     } else if (resolvedBy === 'escalate') {
       // Traversed SVM gate and Voters; Granite tiebreak lit; Bob lights
       nodeStates['svm_gate'] = 'pp-traversed';
@@ -911,10 +898,7 @@ async function loadEscalation(ticketId, resolvedBy, title, desc) {
   });
 })();
 
-// --- Demo presets -----------------------------------------------------------
-// SVM/voter presets use the live resolver. The Granite fixture is deliberately
-// local and visibly labelled: it depicts the exact tie-break state exercised by
-// tests/test_granite.py without making a watsonx.ai request.
+// --- Demo presets: fill the form with a real example and route it live ---
 const DEMO_PRESETS = {
   svm: {
     id: 'T-1',
@@ -927,10 +911,9 @@ const DEMO_PRESETS = {
     desc: 'Not sure what happened but the whole app crawls. Nothing in the error logs. Restarting the container helps for an hour then it comes back.',
   },
   granite: {
-    id: 'SIM-GRANITE-01',
-    title: 'Service crashes randomly',
-    desc: 'The server process exits unexpectedly without any clear error message.',
-    simulated: true,
+    id: 'T-3',
+    title: 'login page renders wrong after migration',
+    desc: 'users see broken css but the session query also looks slow after the last database migration, hard to tell which side is at fault',
   },
   escalate: {
     id: 'A-0007',
@@ -939,39 +922,6 @@ const DEMO_PRESETS = {
   },
 };
 
-const GRANITE_SIMULATION_RESULT = {
-  ticket_id: 'SIM-GRANITE-01',
-  domain: 'api',
-  resolved_by: 'granite_tiebreak',
-  voters: [
-    { voter: 'svm', domain: 'auth', confidence: 0.28 },
-    { voter: 'knn', domain: 'build', confidence: 0.80 },
-    { voter: 'deterministic_scorer', domain: 'api', confidence: 0.00 },
-    { voter: 'granite', domain: 'api', confidence: 0.91 },
-  ],
-  evidence: [],
-  similar_incidents: [],
-  predicted_risk: null,
-  predicted_risk_confidence: null,
-};
-
-function renderGraniteSimulation() {
-  _clearPoll();
-  _resetDispatchState();
-  document.getElementById('escalation-card').classList.add('hidden');
-  document.getElementById('result-area').classList.remove('hidden');
-  document.getElementById('simulation-notice').classList.remove('hidden');
-
-  buildPipeline('granite_tiebreak', false, false, null, null, null);
-  buildPredictedRisk(null, null);
-  buildRationale(GRANITE_SIMULATION_RESULT);
-  buildVoters(GRANITE_SIMULATION_RESULT.voters);
-  buildEvidence(GRANITE_SIMULATION_RESULT.evidence);
-  buildSimilarIncidents([]);
-  document.getElementById('elapsed-row').textContent =
-    'Simulation fixture · no API call · no credits consumed';
-}
-
 document.querySelectorAll('.preset-btn').forEach((b) => {
   b.addEventListener('click', () => {
     const p = DEMO_PRESETS[b.dataset.preset];
@@ -979,20 +929,13 @@ document.querySelectorAll('.preset-btn').forEach((b) => {
     document.getElementById('ticket-id').value = p.id;
     document.getElementById('ticket-title').value = p.title;
     document.getElementById('ticket-desc').value = p.desc;
-    if (p.simulated) {
-      renderGraniteSimulation();
-      return;
-    }
-    document.getElementById('simulation-notice').classList.add('hidden');
-    // Reuse the live submit path for all non-simulated presets.
+    // Reuse the exact live submit path — routing is real, not canned.
     document.getElementById('ticket-form').requestSubmit();
   });
 });
 
 document.getElementById('ticket-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-
-  document.getElementById('simulation-notice').classList.add('hidden');
 
   const id    = document.getElementById('ticket-id').value.trim();
   const title = document.getElementById('ticket-title').value.trim();
